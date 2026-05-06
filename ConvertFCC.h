@@ -1,0 +1,580 @@
+/*----------------------------------------------------------------
+  ConvertFCC.h
+
+  FalconCoding FCC v1 binary container exporter for CIFF.
+
+    [Header]      magic, version, axes, counts, section offsets
+    [Forms]       deduplicated geometry in local space (one mesh per unique shape)
+    [Instances]   form reference + material + localToWorld (column-major 3x4)
+    [Nodes]       scene tree: childCount + firstInstance + instanceCount + name
+    [Materials]   palette (RGBA8)
+
+  CIFF stores every primitive WORLD-BAKED. We factor each primitive
+  into a transform-invariant LOCAL form (driving the form hash and
+  the form-stream tessellation) plus a Matrix3x4 instance transform
+  that puts the form back in world space. Identical local forms map
+  to a single Form record and many Instance records, mirroring the
+  AvevaRvmDebug FCC layout.
+
+  Mesh-typed geometries (FacetGroup tessellations) fall back to a
+  vertex/index mesh hash with an identity instance transform.
+
+  Bounds (world AABB, per-form AABB, per-node subtree AABB) are
+  derived data computed by the viewer at load time.
+----------------------------------------------------------------*/
+
+#pragma once
+
+#include <cmath>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <array>
+
+#include "Convert.h"
+#include "ProcessCIFF.h"
+#include "ShapeCIFF.h"
+#include "TempFile.h"
+#include "TessCIFF.h"
+#include "Util.h"
+#include "WriteBuffer.h"
+
+namespace fcc
+{
+	using namespace std;
+
+	using Matrix3x4 = std::array<float, 12>;
+
+	// Column-major (X col, Y col, Z col, T col), matching AvevaRvmDebug.
+	inline Matrix3x4 Identity3x4()
+	{
+		return Matrix3x4{
+			1.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 1.0f,
+			0.0f, 0.0f, 0.0f,
+		};
+	}
+
+	inline Matrix3x4 toFcc(const ciff::shape::Matrix3x4& m) noexcept
+	{
+		Matrix3x4 out{};
+		for (size_t i = 0; i < 12; ++i) out[i] = m[i];
+		return out;
+	}
+
+	inline void write(WriteBuffer& target, WriteBuffer& source)
+	{
+		source.close();
+		target.append(source.getFile(), true);
+	}
+
+	template <typename T>
+	void write(WriteBuffer& w, const T& t)
+	{
+		w.write(t);
+	}
+
+	template <typename T>
+	void write(WriteBuffer& w, const vector<T>& list)
+	{
+		if (!list.empty())
+			w.write(list.data(), list.size());
+	}
+
+	inline void write(WriteBuffer& w, const string& str)
+	{
+		w.write(static_cast<uint32_t>(str.length()));
+		if (!str.empty())
+			w.write(str);
+	}
+
+	inline void write(WriteBuffer& w, const Matrix3x4& m)
+	{
+		w.write(m.data(), m.size());
+	}
+
+	template <typename T>
+	size_t overwriteAt(WriteBuffer& w, const size_t pos, const T& value)
+	{
+		return w.overwriteAt(pos, value);
+	}
+
+	struct StreamValue
+	{
+		uint64_t val = 0;
+		size_t pos = 0;
+		bool written = false;
+
+		void write(WriteBuffer& w)
+		{
+			pos = w.tell();
+			written = true;
+			fcc::write(w, val);
+		}
+
+		void writeAt(WriteBuffer& w) const
+		{
+			if (!written)
+				throw std::logic_error("StreamValue has not been written");
+
+			fcc::overwriteAt(w, pos, val);
+		}
+	};
+
+	inline void write(WriteBuffer& w, StreamValue& value)
+	{
+		value.write(w);
+	}
+
+	inline void writeAt(WriteBuffer& w, const StreamValue& value)
+	{
+		value.writeAt(w);
+	}
+
+	struct VertexF
+	{
+		float x = 0.0f;
+		float y = 0.0f;
+		float z = 0.0f;
+	};
+
+	inline vector<VertexF> ComputeNormals(const ciff::Mesh& mesh)
+	{
+		const auto n = mesh.points();
+		vector<VertexF> normals(n, VertexF{ 0.0f, 0.0f, 0.0f });
+
+		for (uint32_t t = 0; t < mesh.triangles(); ++t)
+		{
+			const auto i0 = mesh.indices[3 * t + 0];
+			const auto i1 = mesh.indices[3 * t + 1];
+			const auto i2 = mesh.indices[3 * t + 2];
+
+			const auto& a = mesh.vertices[i0];
+			const auto& b = mesh.vertices[i1];
+			const auto& c = mesh.vertices[i2];
+
+			const float ux = static_cast<float>(b.x - a.x);
+			const float uy = static_cast<float>(b.y - a.y);
+			const float uz = static_cast<float>(b.z - a.z);
+			const float vx = static_cast<float>(c.x - a.x);
+			const float vy = static_cast<float>(c.y - a.y);
+			const float vz = static_cast<float>(c.z - a.z);
+
+			const float nx = uy * vz - uz * vy;
+			const float ny = uz * vx - ux * vz;
+			const float nz = ux * vy - uy * vx;
+
+			normals[i0].x += nx; normals[i0].y += ny; normals[i0].z += nz;
+			normals[i1].x += nx; normals[i1].y += ny; normals[i1].z += nz;
+			normals[i2].x += nx; normals[i2].y += ny; normals[i2].z += nz;
+		}
+
+		for (auto& v : normals)
+		{
+			const float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+			if (len > 1e-12f)
+			{
+				v.x /= len; v.y /= len; v.z /= len;
+			}
+			else
+			{
+				v.x = 0.0f; v.y = 0.0f; v.z = 1.0f;
+			}
+		}
+
+		return normals;
+	}
+
+	struct Catalog
+	{
+		// 100 MB streaming buffers for typical CIFF sizes.
+		static constexpr size_t StreamBufferSize = 100ULL * 1024 * 1024;
+
+		Catalog()
+			: formStream(StreamBufferSize)
+			, instanceStream(StreamBufferSize)
+			, nodeStream(StreamBufferSize)
+		{
+		}
+
+		WriteBuffer formStream;
+		WriteBuffer instanceStream;
+		WriteBuffer nodeStream;
+
+		std::optional<TempFile> formTemp;
+		std::optional<TempFile> instanceTemp;
+		std::optional<TempFile> nodeTemp;
+
+		StreamValue formCount;
+		StreamValue instanceCount;
+		StreamValue nodeCount;
+		StreamValue materialCount;
+
+		StreamValue formCatalogOffset;
+		StreamValue instanceTableOffset;
+		StreamValue nodeTreeOffset;
+		StreamValue materialOffset;
+
+		uint32_t emittedFormCount     = 0;
+		uint32_t emittedInstanceCount = 0;
+		uint32_t emittedNodeCount     = 0;
+
+		// shape-hash -> form index. Identity hash maps a 64-bit FNV-1a value
+		// directly to a slot; collisions resolve via the standard probing.
+		struct IdentityHash64
+		{
+			size_t operator()(const uint64_t x) const noexcept { return static_cast<size_t>(x); }
+		};
+		std::unordered_map<uint64_t, uint32_t, IdentityHash64> formIndexByHash;
+
+		std::vector<StreamValue> nodeInstanceCounts;
+		uint32_t pendingNodeFirstInstance = 0;
+	};
+
+	struct Convert;
+
+	struct Header
+	{
+		static constexpr uint32_t NativeMagicBytes = 0x46443343;
+		static constexpr uint32_t NativeSDKVersion = 1;
+		static constexpr uint8_t  UpAxis           = 2; // Z-up
+		static constexpr uint8_t  FrontAxis        = 1; // Y-forward
+
+		static void Write(Convert& convert);
+		static void WriteSum(Convert& convert);
+	};
+
+	struct FormGeometry
+	{
+		static void Write(WriteBuffer& w, const uint64_t shapeHash, const ciff::Mesh& mesh)
+		{
+			fcc::write(w, shapeHash);
+			fcc::write(w, mesh.points());
+
+			// vertices as float32 (3 per point)
+			std::vector<float> vbuf;
+			vbuf.reserve(mesh.vertices.size() * 3);
+			for (const auto& p : mesh.vertices)
+			{
+				vbuf.push_back(static_cast<float>(p.x));
+				vbuf.push_back(static_cast<float>(p.y));
+				vbuf.push_back(static_cast<float>(p.z));
+			}
+			w.write(vbuf.data(), vbuf.size());
+
+			// per-vertex smoothed normals
+			const auto normals = ComputeNormals(mesh);
+			std::vector<float> nbuf;
+			nbuf.reserve(normals.size() * 3);
+			for (const auto& n : normals)
+			{
+				nbuf.push_back(n.x);
+				nbuf.push_back(n.y);
+				nbuf.push_back(n.z);
+			}
+			w.write(nbuf.data(), nbuf.size());
+
+			fcc::write(w, mesh.triangles());
+			fcc::write(w, mesh.indices);
+		}
+
+		static uint32_t AddOrFind(Catalog& catalog, const uint64_t shapeHash, const ciff::Mesh& mesh)
+		{
+			const auto it = catalog.formIndexByHash.find(shapeHash);
+			if (it != catalog.formIndexByHash.end())
+				return it->second;
+
+			const auto index = catalog.emittedFormCount++;
+			catalog.formIndexByHash.emplace(shapeHash, index);
+			Write(catalog.formStream, shapeHash, mesh);
+			return index;
+		}
+	};
+
+	struct Instance
+	{
+		static void Write(WriteBuffer& w, const uint32_t formIndex, const uint32_t materialIndex,
+		                  const Matrix3x4& tx)
+		{
+			fcc::write(w, formIndex);
+			fcc::write(w, materialIndex);
+			fcc::write(w, tx);
+		}
+	};
+
+	struct Materials
+	{
+		static void Write(Convert& convert);
+	};
+
+	struct Node
+	{
+		static void Open(Convert& convert, const ciff::Node& node);
+		static void Close(Convert& convert);
+	};
+
+	struct Footer
+	{
+		static void Write(Convert& convert);
+	};
+
+	struct Convert final : ciff::Convert
+	{
+		Catalog catalog;
+
+		explicit Convert(ciff::Read& data) : ciff::Convert(data)
+		{
+		}
+
+		bool SetFile() override
+		{
+			if (!ciff::Convert::SetFile())
+				return false;
+
+			namespace fs = std::filesystem;
+
+			const auto target = fs::path(target_file);
+			const auto stem   = target.stem().string();
+			const auto dir    = target.parent_path() / (stem + ".fcc_tmp");
+
+			catalog.formTemp.emplace(dir, "forms.bin");
+			catalog.instanceTemp.emplace(dir, "instances.bin");
+			catalog.nodeTemp.emplace(dir, "nodes.bin");
+
+			catalog.formStream.set(catalog.formTemp->path().string());
+			catalog.instanceStream.set(catalog.instanceTemp->path().string());
+			catalog.nodeStream.set(catalog.nodeTemp->path().string());
+
+			return true;
+		}
+
+		void WriteHeader() override
+		{
+			Header::Write(*this);
+		}
+
+		void WriteNode(const ciff::Node& node) override
+		{
+			Node::Open(*this, node);
+		}
+
+		void WriteGeometry(const ciff::Node& node, const size_t geometryIndex) override
+		{
+			const auto& geom = data.geometries[geometryIndex];
+			const auto material = static_cast<uint32_t>(geom.color);
+
+			uint64_t shapeHash = 0;
+			Matrix3x4 instanceTx = Identity3x4();
+			ciff::Mesh localMesh;
+
+			// tess::tessellate(prim) produces the LOCAL form mesh (origin, +Z).
+			// shape::instanceTransform(prim) is the matrix that places that
+			// local form back at the original CIFF world position.
+			switch (geom.primitive)
+			{
+			case ciff::Type::Box:
+			{
+				const auto& b = data.boxes[geom.primitiveIndex];
+				shapeHash  = ciff::shape::hashOf(b);
+				instanceTx = toFcc(ciff::shape::instanceTransform(b));
+				if (!catalog.formIndexByHash.contains(shapeHash))
+					localMesh = ciff::tess::tessellate(b);
+				break;
+			}
+			case ciff::Type::Cylinder:
+			{
+				const auto& c = data.cylinders[geom.primitiveIndex];
+				shapeHash  = ciff::shape::hashOf(c);
+				instanceTx = toFcc(ciff::shape::instanceTransform(c));
+				if (!catalog.formIndexByHash.contains(shapeHash))
+					localMesh = ciff::tess::tessellate(c);
+				break;
+			}
+			case ciff::Type::CircularTorus:
+			{
+				const auto& t = data.circularToruses[geom.primitiveIndex];
+				shapeHash  = ciff::shape::hashOf(t);
+				instanceTx = toFcc(ciff::shape::instanceTransform(t));
+				if (!catalog.formIndexByHash.contains(shapeHash))
+					localMesh = ciff::tess::tessellate(t);
+				break;
+			}
+			case ciff::Type::Sphere:
+			{
+				const auto& s = data.spheres[geom.primitiveIndex];
+				shapeHash  = ciff::shape::hashOf(s);
+				instanceTx = toFcc(ciff::shape::instanceTransform(s));
+				if (!catalog.formIndexByHash.contains(shapeHash))
+					localMesh = ciff::tess::tessellate(s);
+				break;
+			}
+			case ciff::Type::SphericalDish:
+			{
+				const auto& d = data.sphericalDishes[geom.primitiveIndex];
+				shapeHash  = ciff::shape::hashOf(d);
+				instanceTx = toFcc(ciff::shape::instanceTransform(d));
+				if (!catalog.formIndexByHash.contains(shapeHash))
+					localMesh = ciff::tess::tessellate(d);
+				break;
+			}
+			case ciff::Type::GeneralCylinder:
+			{
+				const auto& g = data.generalCylinders[geom.primitiveIndex];
+				shapeHash  = ciff::shape::hashOf(g);
+				instanceTx = toFcc(ciff::shape::instanceTransform(g));
+				if (!catalog.formIndexByHash.contains(shapeHash))
+					localMesh = ciff::tess::tessellate(g);
+				break;
+			}
+			default:
+			{
+				// Mesh fallback (FacetGroup tessellated at read time, world-space).
+				const auto& worldMesh = data.getMesh(geom.mesh);
+				if (worldMesh.empty())
+					return;
+				shapeHash  = ciff::shape::hashOf(worldMesh);
+				instanceTx = Identity3x4();
+				if (!catalog.formIndexByHash.contains(shapeHash))
+					localMesh = worldMesh;
+				break;
+			}
+			}
+
+			const auto formIndex = FormGeometry::AddOrFind(catalog, shapeHash, localMesh);
+
+			Instance::Write(catalog.instanceStream, formIndex, material, instanceTx);
+			catalog.emittedInstanceCount++;
+		}
+
+		void WriteMaterial(bool) override
+		{
+			// Materials section is emitted from WriteFooter once offsets are known.
+		}
+
+		void WriteFooter() override
+		{
+			Footer::Write(*this);
+		}
+	};
+
+	inline void Header::Write(Convert& convert)
+	{
+		auto& w       = convert.write;
+		auto& catalog = convert.catalog;
+
+		fcc::write(w, NativeMagicBytes);
+		fcc::write(w, NativeSDKVersion);
+		fcc::write(w, UpAxis);
+		fcc::write(w, FrontAxis);
+
+		fcc::write(w, catalog.formCount);
+		fcc::write(w, catalog.instanceCount);
+		fcc::write(w, catalog.nodeCount);
+		fcc::write(w, catalog.materialCount);
+
+		fcc::write(w, catalog.formCatalogOffset);
+		fcc::write(w, catalog.instanceTableOffset);
+		fcc::write(w, catalog.nodeTreeOffset);
+		fcc::write(w, catalog.materialOffset);
+	}
+
+	inline void Header::WriteSum(Convert& convert)
+	{
+		auto& w       = convert.write;
+		auto& catalog = convert.catalog;
+
+		catalog.formCount.val     = catalog.emittedFormCount;
+		catalog.instanceCount.val = catalog.emittedInstanceCount;
+		catalog.nodeCount.val     = catalog.emittedNodeCount;
+		catalog.materialCount.val = convert.data.colors.size();
+
+		fcc::writeAt(w, catalog.formCount);
+		fcc::writeAt(w, catalog.instanceCount);
+		fcc::writeAt(w, catalog.nodeCount);
+		fcc::writeAt(w, catalog.materialCount);
+
+		fcc::writeAt(w, catalog.formCatalogOffset);
+		fcc::writeAt(w, catalog.instanceTableOffset);
+		fcc::writeAt(w, catalog.nodeTreeOffset);
+		fcc::writeAt(w, catalog.materialOffset);
+	}
+
+	inline void Node::Close(Convert& convert)
+	{
+		auto& catalog = convert.catalog;
+
+		if (catalog.nodeInstanceCounts.empty())
+			return;
+
+		auto& slot = catalog.nodeInstanceCounts.back();
+		slot.val = catalog.emittedInstanceCount - catalog.pendingNodeFirstInstance;
+		fcc::writeAt(catalog.nodeStream, slot);
+	}
+
+	inline void Node::Open(Convert& convert, const ciff::Node& node)
+	{
+		Node::Close(convert);
+
+		auto& catalog = convert.catalog;
+		auto& w       = catalog.nodeStream;
+
+		catalog.pendingNodeFirstInstance = catalog.emittedInstanceCount;
+		catalog.nodeInstanceCounts.emplace_back();
+
+		fcc::write(w, static_cast<uint32_t>(node.childCount));
+		fcc::write(w, catalog.pendingNodeFirstInstance);
+		fcc::write(w, catalog.nodeInstanceCounts.back()); // patched on next Close
+		fcc::write(w, node.name);
+
+		catalog.emittedNodeCount++;
+	}
+
+	inline void Materials::Write(Convert& convert)
+	{
+		auto& w = convert.write;
+
+		for (const auto& c : convert.data.colors)
+		{
+			fcc::write(w, c.r);
+			fcc::write(w, c.g);
+			fcc::write(w, c.b);
+			fcc::write(w, c.a);
+		}
+	}
+
+	inline void Footer::Write(Convert& convert)
+	{
+		auto& w       = convert.write;
+		auto& catalog = convert.catalog;
+
+		Node::Close(convert);
+
+		catalog.formCatalogOffset.val = w.tell();
+		fcc::write(w, catalog.formStream);
+
+		catalog.instanceTableOffset.val = w.tell();
+		fcc::write(w, catalog.instanceStream);
+
+		catalog.nodeTreeOffset.val = w.tell();
+		fcc::write(w, catalog.nodeStream);
+
+		catalog.materialOffset.val = w.tell();
+		Materials::Write(convert);
+
+		Header::WriteSum(convert);
+
+		catalog.formTemp.reset();
+		catalog.instanceTemp.reset();
+		catalog.nodeTemp.reset();
+	}
+
+	inline bool convert(ciff::Read& data)
+	{
+		return Convert(data).run();
+	}
+} // namespace fcc

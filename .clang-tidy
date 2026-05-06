@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------------------
+# Clang-Tidy Configuration for Visual Studio C++ Project
+#
+# Goals:
+# - Improve readability and maintainability of code
+# - Encourage modern C++ practices (C++11/14/17/20)
+# - Detect common bugs and performance pitfalls
+# - Keep noise low by disabling overly strict or duplicate checks
+#
+# Enabled groups:
+# - bugprone-*        : catch suspicious or error-prone constructs
+# - performance-*     : highlight inefficient code patterns
+# - modernize-*       : recommend modern C++ replacements
+# - readability-*     : improve clarity and style
+# - selected cppcoreguidelines-* : enforce safe member initialization,
+#   special member functions, and discourage unsafe globals
+# - clang-analyzer-*  : static analysis for core and C++ issues
+#
+# Disabled groups:
+# - hicpp-*           : largely duplicates cppcoreguidelines
+# - noisy cppcoreguidelines-* rules (magic numbers, malloc, etc.)
+# - readability-identifier-naming (enforce project style separately)
+# - clang-diagnostic-* (already covered by compiler warnings)
+#
+# Adjust "HeaderFilterRegex" if you only want analysis inside your project.
+# ---------------------------------------------------------------------------
+
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  readability-*,
+  cppcoreguidelines-avoid-non-const-global-variables,
+  cppcoreguidelines-pro-type-member-init,
+  cppcoreguidelines-special-member-functions,
+  clang-analyzer-core.*,
+  clang-analyzer-cplusplus.*
+
+  # Trim noisier checks that often overwhelm useful signals:
+  -readability-identifier-naming,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-non-const-global-variables,         # keep the stricter one disabled if it’s too chatty
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-no-malloc,
+  -cppcoreguidelines-owning-memory,
+  -clang-diagnostic-*,                                          # duplicates compiler diagnostics
+  -hicpp-*                                                      # usually duplicates cppcoreguidelines/modernize
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'   # or limit to your source tree, e.g. ^(src|include)/
+AnalyzeTemporaryDtors: false
+
+CheckOptions:
+  - key: modernize-use-auto.MinTypeNameLength
+    value: '5'
+  - key: modernize-loop-convert.MinConfidence
+    value: reasonable
+  - key: performance-for-range-copy.WarnOnAllAutoCopies
+    value: 'true'
+  - key: readability-braces-around-statements.ShortStatementLines
+    value: '1'
