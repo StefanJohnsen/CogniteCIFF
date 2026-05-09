@@ -305,6 +305,9 @@ namespace fcc
 			fcc::write(w, materialIndex);
 			fcc::write(w, tx);
 		}
+
+		static void Emit(Convert& convert, const uint32_t formIndex, const uint32_t materialIndex,
+		                 const Matrix3x4& tx);
 	};
 
 	struct Materials
@@ -316,6 +319,14 @@ namespace fcc
 	{
 		static void Open(Convert& convert, const ciff::Node& node);
 		static void Close(Convert& convert);
+	};
+
+	struct Geometry
+	{
+		static uint64_t Hash(const ciff::Read& data, const ciff::Geometry& geom);
+		static Matrix3x4 Transform(const ciff::Read& data, const ciff::Geometry& geom);
+		static ciff::Mesh Tessellate(const ciff::Read& data, const ciff::Geometry& geom);
+		static void Write(Convert& convert, const ciff::Node& node, size_t geometryIndex);
 	};
 
 	struct Footer
@@ -365,90 +376,7 @@ namespace fcc
 
 		void WriteGeometry(const ciff::Node& node, const size_t geometryIndex) override
 		{
-			const auto& geom = data.geometries[geometryIndex];
-			const auto material = static_cast<uint32_t>(geom.color);
-
-			uint64_t shapeHash = 0;
-			Matrix3x4 instanceTx = Identity3x4();
-			ciff::Mesh localMesh;
-
-			// tess::tessellate(prim) produces the LOCAL form mesh (origin, +Z).
-			// shape::instanceTransform(prim) is the matrix that places that
-			// local form back at the original CIFF world position.
-			switch (geom.primitive)
-			{
-			case ciff::Type::Box:
-			{
-				const auto& b = data.boxes[geom.primitiveIndex];
-				shapeHash  = ciff::shape::hashOf(b);
-				instanceTx = toFcc(ciff::shape::instanceTransform(b));
-				if (!catalog.formIndexByHash.contains(shapeHash))
-					localMesh = ciff::tess::tessellate(b);
-				break;
-			}
-			case ciff::Type::Cylinder:
-			{
-				const auto& c = data.cylinders[geom.primitiveIndex];
-				shapeHash  = ciff::shape::hashOf(c);
-				instanceTx = toFcc(ciff::shape::instanceTransform(c));
-				if (!catalog.formIndexByHash.contains(shapeHash))
-					localMesh = ciff::tess::tessellate(c);
-				break;
-			}
-			case ciff::Type::CircularTorus:
-			{
-				const auto& t = data.circularToruses[geom.primitiveIndex];
-				shapeHash  = ciff::shape::hashOf(t);
-				instanceTx = toFcc(ciff::shape::instanceTransform(t));
-				if (!catalog.formIndexByHash.contains(shapeHash))
-					localMesh = ciff::tess::tessellate(t);
-				break;
-			}
-			case ciff::Type::Sphere:
-			{
-				const auto& s = data.spheres[geom.primitiveIndex];
-				shapeHash  = ciff::shape::hashOf(s);
-				instanceTx = toFcc(ciff::shape::instanceTransform(s));
-				if (!catalog.formIndexByHash.contains(shapeHash))
-					localMesh = ciff::tess::tessellate(s);
-				break;
-			}
-			case ciff::Type::SphericalDish:
-			{
-				const auto& d = data.sphericalDishes[geom.primitiveIndex];
-				shapeHash  = ciff::shape::hashOf(d);
-				instanceTx = toFcc(ciff::shape::instanceTransform(d));
-				if (!catalog.formIndexByHash.contains(shapeHash))
-					localMesh = ciff::tess::tessellate(d);
-				break;
-			}
-			case ciff::Type::GeneralCylinder:
-			{
-				const auto& g = data.generalCylinders[geom.primitiveIndex];
-				shapeHash  = ciff::shape::hashOf(g);
-				instanceTx = toFcc(ciff::shape::instanceTransform(g));
-				if (!catalog.formIndexByHash.contains(shapeHash))
-					localMesh = ciff::tess::tessellate(g);
-				break;
-			}
-			default:
-			{
-				// Mesh fallback (FacetGroup tessellated at read time, world-space).
-				const auto& worldMesh = data.getMesh(geom.mesh);
-				if (worldMesh.empty())
-					return;
-				shapeHash  = ciff::shape::hashOf(worldMesh);
-				instanceTx = Identity3x4();
-				if (!catalog.formIndexByHash.contains(shapeHash))
-					localMesh = worldMesh;
-				break;
-			}
-			}
-
-			const auto formIndex = FormGeometry::AddOrFind(catalog, shapeHash, localMesh);
-
-			Instance::Write(catalog.instanceStream, formIndex, material, instanceTx);
-			catalog.emittedInstanceCount++;
+			Geometry::Write(*this, node, geometryIndex);
 		}
 
 		void WriteMaterial(bool) override
@@ -502,6 +430,110 @@ namespace fcc
 		fcc::writeAt(w, catalog.instanceTableOffset);
 		fcc::writeAt(w, catalog.nodeTreeOffset);
 		fcc::writeAt(w, catalog.materialOffset);
+	}
+
+	inline void Instance::Emit(Convert& convert, const uint32_t formIndex, const uint32_t materialIndex,
+	                           const Matrix3x4& tx)
+	{
+		auto& catalog = convert.catalog;
+
+		Instance::Write(catalog.instanceStream, formIndex, materialIndex, tx);
+		catalog.emittedInstanceCount++;
+	}
+
+	inline uint64_t Geometry::Hash(const ciff::Read& data, const ciff::Geometry& geom)
+	{
+		switch (geom.primitive)
+		{
+		case ciff::Type::Box:
+			return ciff::shape::hashOf(data.boxes[geom.primitiveIndex]);
+		case ciff::Type::Cylinder:
+			return ciff::shape::hashOf(data.cylinders[geom.primitiveIndex]);
+		case ciff::Type::CircularTorus:
+			return ciff::shape::hashOf(data.circularToruses[geom.primitiveIndex]);
+		case ciff::Type::Sphere:
+			return ciff::shape::hashOf(data.spheres[geom.primitiveIndex]);
+		case ciff::Type::SphericalDish:
+			return ciff::shape::hashOf(data.sphericalDishes[geom.primitiveIndex]);
+		case ciff::Type::GeneralCylinder:
+			return ciff::shape::hashOf(data.generalCylinders[geom.primitiveIndex]);
+		default:
+			return 0; // Mesh fallback hashes the tessellated mesh.
+		}
+	}
+
+	inline Matrix3x4 Geometry::Transform(const ciff::Read& data, const ciff::Geometry& geom)
+	{
+		switch (geom.primitive)
+		{
+		case ciff::Type::Box:
+			return toFcc(ciff::shape::instanceTransform(data.boxes[geom.primitiveIndex]));
+		case ciff::Type::Cylinder:
+			return toFcc(ciff::shape::instanceTransform(data.cylinders[geom.primitiveIndex]));
+		case ciff::Type::CircularTorus:
+			return toFcc(ciff::shape::instanceTransform(data.circularToruses[geom.primitiveIndex]));
+		case ciff::Type::Sphere:
+			return toFcc(ciff::shape::instanceTransform(data.spheres[geom.primitiveIndex]));
+		case ciff::Type::SphericalDish:
+			return toFcc(ciff::shape::instanceTransform(data.sphericalDishes[geom.primitiveIndex]));
+		case ciff::Type::GeneralCylinder:
+			return toFcc(ciff::shape::instanceTransform(data.generalCylinders[geom.primitiveIndex]));
+		default:
+			return Identity3x4();
+		}
+	}
+
+	inline ciff::Mesh Geometry::Tessellate(const ciff::Read& data, const ciff::Geometry& geom)
+	{
+		switch (geom.primitive)
+		{
+		case ciff::Type::Box:
+			return ciff::tess::tessellate(data.boxes[geom.primitiveIndex]);
+		case ciff::Type::Cylinder:
+			return ciff::tess::tessellate(data.cylinders[geom.primitiveIndex]);
+		case ciff::Type::CircularTorus:
+			return ciff::tess::tessellate(data.circularToruses[geom.primitiveIndex]);
+		case ciff::Type::Sphere:
+			return ciff::tess::tessellate(data.spheres[geom.primitiveIndex]);
+		case ciff::Type::SphericalDish:
+			return ciff::tess::tessellate(data.sphericalDishes[geom.primitiveIndex]);
+		case ciff::Type::GeneralCylinder:
+			return ciff::tess::tessellate(data.generalCylinders[geom.primitiveIndex]);
+		default:
+			return data.getMesh(geom.mesh);
+		}
+	}
+
+	inline void Geometry::Write(Convert& convert, const ciff::Node&, const size_t geometryIndex)
+	{
+		const auto& geom = convert.data.geometries[geometryIndex];
+		const auto material = static_cast<uint32_t>(geom.color);
+		auto& catalog = convert.catalog;
+
+		// Parametric primitives can be deduplicated by shape parameters, so cache
+		// hits skip tessellation just like the RVM FCC path.
+		const auto preHash = Hash(convert.data, geom);
+		const auto instanceTx = Transform(convert.data, geom);
+
+		if (preHash != 0)
+		{
+			const auto it = catalog.formIndexByHash.find(preHash);
+			if (it != catalog.formIndexByHash.end())
+			{
+				Instance::Emit(convert, it->second, material, instanceTx);
+				return;
+			}
+		}
+
+		auto localMesh = Tessellate(convert.data, geom);
+
+		if (localMesh.empty())
+			return;
+
+		const auto shapeHash = preHash != 0 ? preHash : ciff::shape::hashOf(localMesh);
+		const auto formIndex = FormGeometry::AddOrFind(catalog, shapeHash, localMesh);
+
+		Instance::Emit(convert, formIndex, material, instanceTx);
 	}
 
 	inline void Node::Close(Convert& convert)
