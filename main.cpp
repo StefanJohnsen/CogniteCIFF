@@ -11,7 +11,7 @@
 #include "ConvertCIFF.h"
 #include "ConvertDAT.h"
 #include "ConvertFBX.h"
-#include "ConvertFCC.h"
+#include "Convert3D.h"
 #include "ConvertGLTF.h"
 #include "ConvertJSON.h"
 #include "ConvertOBJ.h"
@@ -59,8 +59,8 @@ static bool convert(const std::string& source_cad, const std::string& target_cad
 	case AvevaRVM:
 		result = rvm::convert(data);
 		break;
-	case FalconFCC:
-		result = fcc::convert(data);
+	case Falcon3D:
+		result = f3d::convert(data);
 		break;
 	case WavefrontOBJ:
 		result = obj::convert(data);

@@ -48,7 +48,7 @@ namespace ciff
 	//                  type = 23 -> Empty geometry
 	//
 	// The structures populated here are intentionally analogous to
-	// fbx::Read so that downstream writers (FBX, RVM, GLTF, FCC, ...)
+	// fbx::Read so that downstream writers (FBX, RVM, GLTF, 3D, ...)
 	// can use the same Convert framework.
 	class Read
 	{
@@ -105,7 +105,7 @@ namespace ciff
 		// Parametric primitive storage. Geometry::primitive selects which array
 		// the geometry's primitiveIndex refers to. Always parallel to the
 		// tessellated entry in `meshes` so downstream writers can keep using
-		// the mesh path while FCC can dedup against primitive parameters.
+		// the mesh path while 3D can dedup against primitive parameters.
 		std::vector<Box>             boxes;
 		std::vector<Cylinder>        cylinders;
 		std::vector<CircularTorus>   circularToruses;

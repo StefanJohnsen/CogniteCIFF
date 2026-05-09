@@ -4,7 +4,7 @@
   Form / instance factoring for CIFF parametric primitives.
 
   CIFF stores every primitive WORLD-BAKED (the source CAD transform
-  has been folded into Box.center/normal/delta etc.). For FCC we
+  has been folded into Box.center/normal/delta etc.). For 3D we
   need the inverse: a transform-invariant LOCAL form together with
   an instance Matrix3x4 that maps local space into world space.
 

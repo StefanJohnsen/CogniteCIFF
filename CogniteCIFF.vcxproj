@@ -161,7 +161,7 @@
     <ClInclude Include="ConvertCIFF.h" />
     <ClInclude Include="ConvertDAT.h" />
     <ClInclude Include="ConvertFBX.h" />
-    <ClInclude Include="ConvertFCC.h" />
+    <ClInclude Include="Convert3D.h" />
     <ClInclude Include="ConvertGLTF.h" />
     <ClInclude Include="ConvertJSON.h" />
     <ClInclude Include="ConvertOBJ.h" />

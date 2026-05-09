@@ -16,8 +16,8 @@
 
   This mirrors the AvevaRvmDebug TessRVM.h convention. The CIFF reader
   (ReadCIFF.h) tessellates locally, then transforms the mesh to world
-  space using shape::instanceTransform(prim). The FCC writer
-  (ConvertFCC.h) uses the local mesh directly as a deduplicated form,
+  space using shape::instanceTransform(prim). The 3D writer
+  (Convert3D.h) uses the local mesh directly as a deduplicated form,
   with the same instanceTransform as the per-instance Matrix3x4.
 
   Algorithms favour clarity and correctness over fidelity. Default

@@ -24,7 +24,7 @@
     <ClInclude Include="ConvertCIFF.h"><Filter>Source Files</Filter></ClInclude>
     <ClInclude Include="ConvertDAT.h"><Filter>Source Files</Filter></ClInclude>
     <ClInclude Include="ConvertFBX.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertFCC.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="Convert3D.h"><Filter>Source Files</Filter></ClInclude>
     <ClInclude Include="ConvertGLTF.h"><Filter>Source Files</Filter></ClInclude>
     <ClInclude Include="ConvertJSON.h"><Filter>Source Files</Filter></ClInclude>
     <ClInclude Include="ConvertOBJ.h"><Filter>Source Files</Filter></ClInclude>

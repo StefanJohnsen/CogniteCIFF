@@ -12,7 +12,7 @@ enum fileType : uint8_t
 	CogniteCIFF,
 	AutodeskFBX,
 	AvevaRVM,
-	FalconFCC,
+	Falcon3D,
 	WavefrontOBJ,
 	KhronosGLTF,
 	HierarchyTXT,
@@ -43,8 +43,8 @@ inline fileType targetType(const std::string& file)
 	if (ext == ".rvm")
 		return AvevaRVM;
 
-	if (ext == ".fcc")
-		return FalconFCC;
+	if (ext == ".3d")
+		return Falcon3D;
 
 	if (ext == ".obj")
 		return WavefrontOBJ;
@@ -76,7 +76,7 @@ inline std::string mode(const std::string& file, const bool source)
 	case CogniteCIFF:
 	case AutodeskFBX:
 	case AvevaRVM:
-	case FalconFCC:
+	case Falcon3D:
 		return source ? "rb" : "wb";
 	case WavefrontOBJ:
 	case KhronosGLTF:

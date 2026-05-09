@@ -71,7 +71,7 @@ namespace cmd
 	inline std::string text_version = "CogniteCIFFConverter  version: 0.1.0";
 
 	inline const std::vector<std::string> source_ext = { "ciff" };
-	inline const std::vector<std::string> target_ext = { "ciff", "fbx", "rvm", "fcc", "gltf", "obj", "json", "dat", "txt" };
+	inline const std::vector<std::string> target_ext = { "ciff", "fbx", "rvm", "3d", "gltf", "obj", "json", "dat", "txt" };
 
 	inline cmd_flag help{ "help" };
 	inline cmd_flag version{ "version" };

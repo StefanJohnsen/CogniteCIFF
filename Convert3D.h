@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------
-  ConvertFCC.h
+  Convert3D.h
 
-  FalconCoding FCC v1 binary container exporter for CIFF.
+  FalconCoding 3D v1 binary container exporter for CIFF.
 
     [Header]      magic, version, axes, counts, section offsets
     [Forms]       deduplicated geometry in local space (one mesh per unique shape)
@@ -14,7 +14,7 @@
   the form-stream tessellation) plus a Matrix3x4 instance transform
   that puts the form back in world space. Identical local forms map
   to a single Form record and many Instance records, mirroring the
-  AvevaRvmDebug FCC layout.
+  AvevaRvmDebug 3D layout.
 
   Mesh-typed geometries (FacetGroup tessellations) fall back to a
   vertex/index mesh hash with an identity instance transform.
@@ -43,7 +43,7 @@
 #include "Util.h"
 #include "WriteBuffer.h"
 
-namespace fcc
+namespace f3d
 {
 	using namespace std;
 
@@ -60,7 +60,7 @@ namespace fcc
 		};
 	}
 
-	inline Matrix3x4 toFcc(const ciff::shape::Matrix3x4& m) noexcept
+	inline Matrix3x4 toF3D(const ciff::shape::Matrix3x4& m) noexcept
 	{
 		Matrix3x4 out{};
 		for (size_t i = 0; i < 12; ++i) out[i] = m[i];
@@ -114,7 +114,7 @@ namespace fcc
 		{
 			pos = w.tell();
 			written = true;
-			fcc::write(w, val);
+			f3d::write(w, val);
 		}
 
 		void writeAt(WriteBuffer& w) const
@@ -122,7 +122,7 @@ namespace fcc
 			if (!written)
 				throw std::logic_error("StreamValue has not been written");
 
-			fcc::overwriteAt(w, pos, val);
+			f3d::overwriteAt(w, pos, val);
 		}
 	};
 
@@ -253,8 +253,8 @@ namespace fcc
 	{
 		static void Write(WriteBuffer& w, const uint64_t shapeHash, const ciff::Mesh& mesh)
 		{
-			fcc::write(w, shapeHash);
-			fcc::write(w, mesh.points());
+			f3d::write(w, shapeHash);
+			f3d::write(w, mesh.points());
 
 			// vertices as float32 (3 per point)
 			std::vector<float> vbuf;
@@ -279,8 +279,8 @@ namespace fcc
 			}
 			w.write(nbuf.data(), nbuf.size());
 
-			fcc::write(w, mesh.triangles());
-			fcc::write(w, mesh.indices);
+			f3d::write(w, mesh.triangles());
+			f3d::write(w, mesh.indices);
 		}
 
 		static uint32_t AddOrFind(Catalog& catalog, const uint64_t shapeHash, const ciff::Mesh& mesh)
@@ -301,9 +301,9 @@ namespace fcc
 		static void Write(WriteBuffer& w, const uint32_t formIndex, const uint32_t materialIndex,
 		                  const Matrix3x4& tx)
 		{
-			fcc::write(w, formIndex);
-			fcc::write(w, materialIndex);
-			fcc::write(w, tx);
+			f3d::write(w, formIndex);
+			f3d::write(w, materialIndex);
+			f3d::write(w, tx);
 		}
 
 		static void Emit(Convert& convert, const uint32_t formIndex, const uint32_t materialIndex,
@@ -351,7 +351,7 @@ namespace fcc
 
 			const auto target = fs::path(target_file);
 			const auto stem   = target.stem().string();
-			const auto dir    = target.parent_path() / (stem + ".fcc_tmp");
+			const auto dir    = target.parent_path() / (stem + ".3d_tmp");
 
 			catalog.formTemp.emplace(dir, "forms.bin");
 			catalog.instanceTemp.emplace(dir, "instances.bin");
@@ -395,20 +395,20 @@ namespace fcc
 		auto& w       = convert.write;
 		auto& catalog = convert.catalog;
 
-		fcc::write(w, NativeMagicBytes);
-		fcc::write(w, NativeSDKVersion);
-		fcc::write(w, UpAxis);
-		fcc::write(w, FrontAxis);
+		f3d::write(w, NativeMagicBytes);
+		f3d::write(w, NativeSDKVersion);
+		f3d::write(w, UpAxis);
+		f3d::write(w, FrontAxis);
 
-		fcc::write(w, catalog.formCount);
-		fcc::write(w, catalog.instanceCount);
-		fcc::write(w, catalog.nodeCount);
-		fcc::write(w, catalog.materialCount);
+		f3d::write(w, catalog.formCount);
+		f3d::write(w, catalog.instanceCount);
+		f3d::write(w, catalog.nodeCount);
+		f3d::write(w, catalog.materialCount);
 
-		fcc::write(w, catalog.formCatalogOffset);
-		fcc::write(w, catalog.instanceTableOffset);
-		fcc::write(w, catalog.nodeTreeOffset);
-		fcc::write(w, catalog.materialOffset);
+		f3d::write(w, catalog.formCatalogOffset);
+		f3d::write(w, catalog.instanceTableOffset);
+		f3d::write(w, catalog.nodeTreeOffset);
+		f3d::write(w, catalog.materialOffset);
 	}
 
 	inline void Header::WriteSum(Convert& convert)
@@ -421,15 +421,15 @@ namespace fcc
 		catalog.nodeCount.val     = catalog.emittedNodeCount;
 		catalog.materialCount.val = convert.data.colors.size();
 
-		fcc::writeAt(w, catalog.formCount);
-		fcc::writeAt(w, catalog.instanceCount);
-		fcc::writeAt(w, catalog.nodeCount);
-		fcc::writeAt(w, catalog.materialCount);
+		f3d::writeAt(w, catalog.formCount);
+		f3d::writeAt(w, catalog.instanceCount);
+		f3d::writeAt(w, catalog.nodeCount);
+		f3d::writeAt(w, catalog.materialCount);
 
-		fcc::writeAt(w, catalog.formCatalogOffset);
-		fcc::writeAt(w, catalog.instanceTableOffset);
-		fcc::writeAt(w, catalog.nodeTreeOffset);
-		fcc::writeAt(w, catalog.materialOffset);
+		f3d::writeAt(w, catalog.formCatalogOffset);
+		f3d::writeAt(w, catalog.instanceTableOffset);
+		f3d::writeAt(w, catalog.nodeTreeOffset);
+		f3d::writeAt(w, catalog.materialOffset);
 	}
 
 	inline void Instance::Emit(Convert& convert, const uint32_t formIndex, const uint32_t materialIndex,
@@ -467,17 +467,17 @@ namespace fcc
 		switch (geom.primitive)
 		{
 		case ciff::Type::Box:
-			return toFcc(ciff::shape::instanceTransform(data.boxes[geom.primitiveIndex]));
+			return toF3D(ciff::shape::instanceTransform(data.boxes[geom.primitiveIndex]));
 		case ciff::Type::Cylinder:
-			return toFcc(ciff::shape::instanceTransform(data.cylinders[geom.primitiveIndex]));
+			return toF3D(ciff::shape::instanceTransform(data.cylinders[geom.primitiveIndex]));
 		case ciff::Type::CircularTorus:
-			return toFcc(ciff::shape::instanceTransform(data.circularToruses[geom.primitiveIndex]));
+			return toF3D(ciff::shape::instanceTransform(data.circularToruses[geom.primitiveIndex]));
 		case ciff::Type::Sphere:
-			return toFcc(ciff::shape::instanceTransform(data.spheres[geom.primitiveIndex]));
+			return toF3D(ciff::shape::instanceTransform(data.spheres[geom.primitiveIndex]));
 		case ciff::Type::SphericalDish:
-			return toFcc(ciff::shape::instanceTransform(data.sphericalDishes[geom.primitiveIndex]));
+			return toF3D(ciff::shape::instanceTransform(data.sphericalDishes[geom.primitiveIndex]));
 		case ciff::Type::GeneralCylinder:
-			return toFcc(ciff::shape::instanceTransform(data.generalCylinders[geom.primitiveIndex]));
+			return toF3D(ciff::shape::instanceTransform(data.generalCylinders[geom.primitiveIndex]));
 		default:
 			return Identity3x4();
 		}
@@ -511,7 +511,7 @@ namespace fcc
 		auto& catalog = convert.catalog;
 
 		// Parametric primitives can be deduplicated by shape parameters, so cache
-		// hits skip tessellation just like the RVM FCC path.
+		// hits skip tessellation just like the RVM 3D path.
 		const auto preHash = Hash(convert.data, geom);
 		const auto instanceTx = Transform(convert.data, geom);
 
@@ -545,7 +545,7 @@ namespace fcc
 
 		auto& slot = catalog.nodeInstanceCounts.back();
 		slot.val = catalog.emittedInstanceCount - catalog.pendingNodeFirstInstance;
-		fcc::writeAt(catalog.nodeStream, slot);
+		f3d::writeAt(catalog.nodeStream, slot);
 	}
 
 	inline void Node::Open(Convert& convert, const ciff::Node& node)
@@ -558,10 +558,10 @@ namespace fcc
 		catalog.pendingNodeFirstInstance = catalog.emittedInstanceCount;
 		catalog.nodeInstanceCounts.emplace_back();
 
-		fcc::write(w, static_cast<uint32_t>(node.childCount));
-		fcc::write(w, catalog.pendingNodeFirstInstance);
-		fcc::write(w, catalog.nodeInstanceCounts.back()); // patched on next Close
-		fcc::write(w, node.name);
+		f3d::write(w, static_cast<uint32_t>(node.childCount));
+		f3d::write(w, catalog.pendingNodeFirstInstance);
+		f3d::write(w, catalog.nodeInstanceCounts.back()); // patched on next Close
+		f3d::write(w, node.name);
 
 		catalog.emittedNodeCount++;
 	}
@@ -572,10 +572,10 @@ namespace fcc
 
 		for (const auto& c : convert.data.colors)
 		{
-			fcc::write(w, c.r);
-			fcc::write(w, c.g);
-			fcc::write(w, c.b);
-			fcc::write(w, c.a);
+			f3d::write(w, c.r);
+			f3d::write(w, c.g);
+			f3d::write(w, c.b);
+			f3d::write(w, c.a);
 		}
 	}
 
@@ -587,13 +587,13 @@ namespace fcc
 		Node::Close(convert);
 
 		catalog.formCatalogOffset.val = w.tell();
-		fcc::write(w, catalog.formStream);
+		f3d::write(w, catalog.formStream);
 
 		catalog.instanceTableOffset.val = w.tell();
-		fcc::write(w, catalog.instanceStream);
+		f3d::write(w, catalog.instanceStream);
 
 		catalog.nodeTreeOffset.val = w.tell();
-		fcc::write(w, catalog.nodeStream);
+		f3d::write(w, catalog.nodeStream);
 
 		catalog.materialOffset.val = w.tell();
 		Materials::Write(convert);
@@ -609,4 +609,4 @@ namespace fcc
 	{
 		return Convert(data).run();
 	}
-} // namespace fcc
+} // namespace f3d

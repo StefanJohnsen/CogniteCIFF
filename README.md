@@ -8,7 +8,7 @@ emits one of:
 | Cognite CIFF (clone) | `.ciff` | Full re-emit using the same writer as `AutodeskFBX` |
 | Autodesk FBX        | `.fbx`  | Scaffold (ASCII placeholder) |
 | AVEVA RVM           | `.rvm`  | Scaffold (text placeholder) |
-| FalconCoding FCC    | `.fcc`  | Scaffold |
+| FalconCoding 3D    | `.3d`  | Scaffold |
 | Khronos glTF        | `.gltf` | Scaffold (minimal JSON) |
 | Wavefront OBJ       | `.obj`  | Working (vertices + faces) |
 | Hierarchy text      | `.txt`  | Working |
@@ -56,7 +56,7 @@ are copied verbatim from `AutodeskFBX`.
 - The CIFF reader follows the format produced by `ConvertCIFF.h` in the
   `AutodeskFBX` repository (magic `0x46443343`, version 4, record types
   `1`, `3`, `19`, `23`, footer `0`).
-- The FBX, RVM, glTF and FCC writers are scaffolds. They produce valid
+- The FBX, RVM, glTF and 3D writers are scaffolds. They produce valid
   but minimal output so the full pipeline compiles and runs end-to-end.
   Replace them with the full implementations from `AutodeskFBX` /
   `AvevaRvmDebug` when needed.
