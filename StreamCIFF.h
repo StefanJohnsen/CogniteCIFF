@@ -13,7 +13,7 @@ namespace ciff::binary
 	// Default chunk size for buffered reads (4 MB).
 	inline constexpr std::size_t StreamChunkSize = 4ULL * 1024 * 1024;
 
-	// Thin little-endian binary reader on top of stream::StreamFile.
+	// Thin little-endian binary reader on top of ciff::StreamFile.
 	// CIFF is a little-endian format so the same memory layout is used directly.
 	class Stream
 	{
@@ -82,6 +82,6 @@ namespace ciff::binary
 		}
 
 	private:
-		stream::StreamFile stream;
+		ciff::StreamFile stream;
 	};
 } // namespace ciff::binary

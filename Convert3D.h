@@ -243,7 +243,7 @@ namespace f3d
 		static constexpr uint32_t NativeMagicBytes = 0x46443343;
 		static constexpr uint32_t NativeSDKVersion = 1;
 		static constexpr uint8_t  UpAxis           = 2; // Z-up
-		static constexpr uint8_t  FrontAxis        = 1; // Y-forward
+		static constexpr uint8_t  FrontAxis        = 4; // Y-forward
 
 		static void Write(Convert& convert);
 		static void WriteSum(Convert& convert);

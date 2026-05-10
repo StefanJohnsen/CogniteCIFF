@@ -21,7 +21,7 @@
 #define tell_file ftello
 #endif
 
-namespace stream
+namespace ciff
 {
 	class StreamFile
 	{
