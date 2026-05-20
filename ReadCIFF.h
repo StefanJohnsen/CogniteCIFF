@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <filesystem>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -116,6 +114,12 @@ namespace ciff
 		ReadPrimitives MESH;
 
 	private:
+		struct OpenNode
+		{
+			size_t index = 0;
+			size_t remainingChildren = 0;
+		};
+
 		void readHeader(binary::Stream& stream)
 		{
 			header.magic = stream.read<uint32_t>();
@@ -135,6 +139,7 @@ namespace ciff
 		void readBody(binary::Stream& stream)
 		{
 			bar::start("Parse CIFF nodes and geometry", static_cast<size_t>(stream.size()));
+			std::vector<OpenNode> openNodes;
 
 			while (true)
 			{
@@ -147,7 +152,7 @@ namespace ciff
 					bar::stop();
 					return;
 				case 1:
-					readNode(stream);
+					readNode(stream, openNodes);
 					break;
 				case 19:
 					readMaterial(stream);
@@ -170,7 +175,7 @@ namespace ciff
 			}
 		}
 
-		void readNode(binary::Stream& stream)
+		void readNode(binary::Stream& stream, std::vector<OpenNode>& openNodes)
 		{
 			Node node;
 			const auto childCount = stream.read<uint32_t>();
@@ -201,6 +206,19 @@ namespace ciff
 				if (geometryIndex != max_size)
 					node.geometries.emplace_back(geometryIndex);
 			}
+
+			while (!openNodes.empty() && openNodes.back().remainingChildren == 0)
+				openNodes.pop_back();
+
+			const auto nodeIndex = nodes.size();
+			if (nodeIndex != 0 && !openNodes.empty())
+			{
+				node.parentIndex = openNodes.back().index;
+				--openNodes.back().remainingChildren;
+			}
+
+			if (node.childCount > 0)
+				openNodes.push_back(OpenNode{ nodeIndex, node.childCount });
 
 			nodes.emplace_back(std::move(node));
 		}

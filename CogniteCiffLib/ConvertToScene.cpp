@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -78,16 +79,18 @@ namespace
         }
     }
 
-    std::vector<float> ComputeNormals(const ciff::Mesh& mesh)
+    // Builds the SceneData normal buffer used by viewers for lighting.
+    // Source meshes and tessellated primitives do not always carry stable normals,
+    // so derive smooth per-vertex normals from area-weighted triangle normals here.
+    std::vector<float> GenerateVertexNormals(const ciff::Mesh& mesh)
     {
-        const auto n = static_cast<std::size_t>(mesh.points());
-        std::vector<float> normals(n * 3ULL, 0.0f);
+        std::vector<float> normals(static_cast<std::size_t>(mesh.points()) * 3ULL, 0.0f);
 
-        for (uint32_t t = 0; t < mesh.triangles(); ++t)
+        for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
         {
-            const auto i0 = mesh.indices[3 * t + 0];
-            const auto i1 = mesh.indices[3 * t + 1];
-            const auto i2 = mesh.indices[3 * t + 2];
+            const auto i0 = mesh.indices[i + 0];
+            const auto i1 = mesh.indices[i + 1];
+            const auto i2 = mesh.indices[i + 2];
 
             if (i0 >= mesh.vertices.size() || i1 >= mesh.vertices.size() || i2 >= mesh.vertices.size())
                 continue;
@@ -96,40 +99,42 @@ namespace
             const auto& b = mesh.vertices[i1];
             const auto& c = mesh.vertices[i2];
 
-            const float ux = static_cast<float>(b.x - a.x);
-            const float uy = static_cast<float>(b.y - a.y);
-            const float uz = static_cast<float>(b.z - a.z);
-            const float vx = static_cast<float>(c.x - a.x);
-            const float vy = static_cast<float>(c.y - a.y);
-            const float vz = static_cast<float>(c.z - a.z);
+            const auto ux = b.x - a.x;
+            const auto uy = b.y - a.y;
+            const auto uz = b.z - a.z;
+            const auto vx = c.x - a.x;
+            const auto vy = c.y - a.y;
+            const auto vz = c.z - a.z;
 
-            const float nx = uy * vz - uz * vy;
-            const float ny = uz * vx - ux * vz;
-            const float nz = ux * vy - uy * vx;
+            const auto nx = static_cast<float>(uy * vz - uz * vy);
+            const auto ny = static_cast<float>(uz * vx - ux * vz);
+            const auto nz = static_cast<float>(ux * vy - uy * vx);
 
-            normals[3 * i0 + 0] += nx; normals[3 * i0 + 1] += ny; normals[3 * i0 + 2] += nz;
-            normals[3 * i1 + 0] += nx; normals[3 * i1 + 1] += ny; normals[3 * i1 + 2] += nz;
-            normals[3 * i2 + 0] += nx; normals[3 * i2 + 1] += ny; normals[3 * i2 + 2] += nz;
+            for (const auto index : { i0, i1, i2 })
+            {
+                const auto base = static_cast<std::size_t>(index) * 3ULL;
+                normals[base + 0] += nx;
+                normals[base + 1] += ny;
+                normals[base + 2] += nz;
+            }
         }
 
         for (std::size_t i = 0; i + 2 < normals.size(); i += 3)
         {
-            const float x = normals[i + 0];
-            const float y = normals[i + 1];
-            const float z = normals[i + 2];
-            const float len = std::sqrt(x * x + y * y + z * z);
-            if (len > 1e-12f)
+            const auto x = normals[i + 0];
+            const auto y = normals[i + 1];
+            const auto z = normals[i + 2];
+            const auto length = std::sqrt(x * x + y * y + z * z);
+
+            if (length <= std::numeric_limits<float>::epsilon())
             {
-                normals[i + 0] = x / len;
-                normals[i + 1] = y / len;
-                normals[i + 2] = z / len;
-            }
-            else
-            {
-                normals[i + 0] = 0.0f;
-                normals[i + 1] = 0.0f;
                 normals[i + 2] = 1.0f;
+                continue;
             }
+
+            normals[i + 0] = x / length;
+            normals[i + 1] = y / length;
+            normals[i + 2] = z / length;
         }
 
         return normals;
@@ -247,7 +252,7 @@ namespace
                 sceneMesh.positions.push_back(static_cast<float>(v.z));
             }
 
-            sceneMesh.normals = ComputeNormals(mesh);
+            sceneMesh.normals = GenerateVertexNormals(mesh);
             sceneMesh.indices = mesh.indices;
 
             sd.meshes.push_back(std::move(sceneMesh));

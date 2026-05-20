@@ -2,11 +2,21 @@
 
 // SceneData.h
 //
-// Shared scene contract between converters (FBX/RVM/CIFF) and 3DViewer.
-// Header-only. No DirectX, no Windows, no I/O. Pure data.
+// Shared scene contract between every Convert*-pipeline (FBX/RVM/CIFF/.3d)
+// and the 3DViewer. Header-only. No DirectX, no Windows, no I/O. Pure data.
 //
-// NOTE: This is a copy of the same file that lives in 3DViewer/Scene/
-// and in the other *Lib folders. The copies must stay in sync.
+// Designed so that vertex/normal/index arrays can be read directly from disk
+// (one ReadExact per array) and uploaded directly to GPU buffers (memcpy).
+//
+// NOTE: This file is intentionally duplicated across:
+//         3DViewer/Scene/SceneData.h
+//         CADViewer/Scene/SceneData.h
+//         AutodeskFBX/AutodeskFBXLib/SceneData.h
+//         AvevaRvmDebug/AvevaRvmLib/SceneData.h
+//         CogniteCIFF/CogniteCiffLib/SceneData.h
+//         Falcon3D/Falcon3DLib/SceneData.h
+//       All copies MUST stay byte-identical. When the contract stabilises
+//       it should be promoted to a single shared module.
 
 #include <cstdint>
 #include <string>
@@ -20,55 +30,62 @@ namespace scene
 
     constexpr std::uint32_t kInvalidIndex = UINT32_MAX;
 
+    // A unique mesh form in local space. Many instances can share one mesh.
+    // Flat float arrays - same layout as .3d on disk and as GPU vertex buffers.
     struct Mesh
     {
-        std::vector<float>         positions;
-        std::vector<float>         normals;
-        std::vector<std::uint32_t> indices;
+        std::vector<float>         positions;   // 3 * pointCount (x,y,z,...)
+        std::vector<float>         normals;     // 3 * pointCount, empty if not provided
+        std::vector<std::uint32_t> indices;     // 3 * triangleCount
     };
 
+    // One placement of a mesh in world space.
     struct Instance
     {
         std::uint32_t meshIndex     = kInvalidIndex;
         std::uint32_t materialIndex = kInvalidIndex;
         std::uint32_t nodeIndex     = kInvalidIndex;
-        float         transform[12] = { 1, 0, 0,  0, 1, 0,  0, 0, 1,  0, 0, 0 };
+        float         transform[12] = { 1, 0, 0,  0, 1, 0,  0, 0, 1,  0, 0, 0 }; // column-major 3x4
     };
 
+    // RGBA color (0..255) + optional texture reference.
     struct Material
     {
         std::uint8_t  r = 255;
         std::uint8_t  g = 255;
         std::uint8_t  b = 255;
         std::uint8_t  a = 255;
-        std::uint32_t textureIndex = kInvalidIndex;
+        std::uint32_t textureIndex = kInvalidIndex; // kInvalidIndex = untextured
     };
 
+    // Compressed image data carried from source file.
     struct Texture
     {
-        std::string               name;
-        std::string               format;
-        std::vector<std::uint8_t> data;
+        std::string               name;     // identifier from source
+        std::string               format;   // "png", "jpg", ...
+        std::vector<std::uint8_t> data;     // raw compressed bytes
     };
 
+    // Hierarchy node. Children are derived from parent indices at load time.
     struct Node
     {
-        std::int32_t  parent        = -1;
+        std::int32_t  parent        = -1;     // -1 = root
         std::uint32_t firstInstance = 0;
         std::uint32_t instanceCount = 0;
-        std::string   name;
+        std::string   name;                   // UTF-8 / ANSI
     };
 
+    // Top-level scene container.
     struct SceneData
     {
         UpAxis    upAxis             = UpAxis::Z;
-        FrontAxis frontAxis          = FrontAxis::NegY;
+        FrontAxis frontAxis          = FrontAxis::Y;
         bool      mirrorXAxisInWorld = false;
 
         std::vector<Mesh>     meshes;
         std::vector<Instance> instances;
         std::vector<Material> materials;
-        std::vector<Texture>  textures;
+        std::vector<Texture>  textures;     // empty = no textures in scene
         std::vector<Node>     nodes;
         std::uint32_t         rootNode = 0;
     };

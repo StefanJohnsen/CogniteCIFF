@@ -6,7 +6,7 @@
     [Header]      magic, version, axes, counts, section offsets
     [Forms]       deduplicated geometry in local space (one mesh per unique shape)
     [Instances]   form reference + material + localToWorld (column-major 3x4)
-    [Nodes]       scene tree: childCount + firstInstance + instanceCount + name
+    [Nodes]       scene tree: parent (int32, -1 for root) + firstInstance + instanceCount + name
     [Materials]   palette (RGBA8)
 
   CIFF stores every primitive WORLD-BAKED. We factor each primitive
@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -143,48 +144,62 @@ namespace f3d
 		float z = 0.0f;
 	};
 
-	inline vector<VertexF> ComputeNormals(const ciff::Mesh& mesh)
+	// Builds the .3d normal buffer used by viewers for lighting.
+	// Source meshes and tessellated primitives do not always carry stable normals,
+	// so derive smooth per-vertex normals from area-weighted triangle normals here.
+	inline std::vector<float> GenerateVertexNormals(const ciff::Mesh& mesh)
 	{
-		const auto n = mesh.points();
-		vector<VertexF> normals(n, VertexF{ 0.0f, 0.0f, 0.0f });
+		std::vector<float> normals(static_cast<std::size_t>(mesh.points()) * 3ULL, 0.0f);
 
-		for (uint32_t t = 0; t < mesh.triangles(); ++t)
+		for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
 		{
-			const auto i0 = mesh.indices[3 * t + 0];
-			const auto i1 = mesh.indices[3 * t + 1];
-			const auto i2 = mesh.indices[3 * t + 2];
+			const auto i0 = mesh.indices[i + 0];
+			const auto i1 = mesh.indices[i + 1];
+			const auto i2 = mesh.indices[i + 2];
+
+			if (i0 >= mesh.vertices.size() || i1 >= mesh.vertices.size() || i2 >= mesh.vertices.size())
+				continue;
 
 			const auto& a = mesh.vertices[i0];
 			const auto& b = mesh.vertices[i1];
 			const auto& c = mesh.vertices[i2];
 
-			const float ux = static_cast<float>(b.x - a.x);
-			const float uy = static_cast<float>(b.y - a.y);
-			const float uz = static_cast<float>(b.z - a.z);
-			const float vx = static_cast<float>(c.x - a.x);
-			const float vy = static_cast<float>(c.y - a.y);
-			const float vz = static_cast<float>(c.z - a.z);
+			const auto ux = b.x - a.x;
+			const auto uy = b.y - a.y;
+			const auto uz = b.z - a.z;
+			const auto vx = c.x - a.x;
+			const auto vy = c.y - a.y;
+			const auto vz = c.z - a.z;
 
-			const float nx = uy * vz - uz * vy;
-			const float ny = uz * vx - ux * vz;
-			const float nz = ux * vy - uy * vx;
+			const auto nx = static_cast<float>(uy * vz - uz * vy);
+			const auto ny = static_cast<float>(uz * vx - ux * vz);
+			const auto nz = static_cast<float>(ux * vy - uy * vx);
 
-			normals[i0].x += nx; normals[i0].y += ny; normals[i0].z += nz;
-			normals[i1].x += nx; normals[i1].y += ny; normals[i1].z += nz;
-			normals[i2].x += nx; normals[i2].y += ny; normals[i2].z += nz;
+			for (const auto index : { i0, i1, i2 })
+			{
+				const auto base = static_cast<std::size_t>(index) * 3ULL;
+				normals[base + 0] += nx;
+				normals[base + 1] += ny;
+				normals[base + 2] += nz;
+			}
 		}
 
-		for (auto& v : normals)
+		for (std::size_t i = 0; i + 2 < normals.size(); i += 3)
 		{
-			const float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-			if (len > 1e-12f)
+			const auto x = normals[i + 0];
+			const auto y = normals[i + 1];
+			const auto z = normals[i + 2];
+			const auto length = std::sqrt(x * x + y * y + z * z);
+
+			if (length <= std::numeric_limits<float>::epsilon())
 			{
-				v.x /= len; v.y /= len; v.z /= len;
+				normals[i + 2] = 1.0f;
+				continue;
 			}
-			else
-			{
-				v.x = 0.0f; v.y = 0.0f; v.z = 1.0f;
-			}
+
+			normals[i + 0] = x / length;
+			normals[i + 1] = y / length;
+			normals[i + 2] = z / length;
 		}
 
 		return normals;
@@ -268,16 +283,8 @@ namespace f3d
 			w.write(vbuf.data(), vbuf.size());
 
 			// per-vertex smoothed normals
-			const auto normals = ComputeNormals(mesh);
-			std::vector<float> nbuf;
-			nbuf.reserve(normals.size() * 3);
-			for (const auto& n : normals)
-			{
-				nbuf.push_back(n.x);
-				nbuf.push_back(n.y);
-				nbuf.push_back(n.z);
-			}
-			w.write(nbuf.data(), nbuf.size());
+			const auto normals = GenerateVertexNormals(mesh);
+			w.write(normals.data(), normals.size());
 
 			f3d::write(w, mesh.triangles());
 			f3d::write(w, mesh.indices);
@@ -558,7 +565,11 @@ namespace f3d
 		catalog.pendingNodeFirstInstance = catalog.emittedInstanceCount;
 		catalog.nodeInstanceCounts.emplace_back();
 
-		f3d::write(w, static_cast<uint32_t>(node.childCount));
+		const int32_t parent = (convert.nodeIndex == 0)
+			? -1
+			: static_cast<int32_t>(node.parentIndex);
+
+		f3d::write(w, parent);
 		f3d::write(w, catalog.pendingNodeFirstInstance);
 		f3d::write(w, catalog.nodeInstanceCounts.back()); // patched on next Close
 		f3d::write(w, node.name);
