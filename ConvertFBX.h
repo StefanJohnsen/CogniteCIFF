@@ -29,7 +29,6 @@
 #pragma once
 
 #include <cstdint>
-#include <cstring>
 #include <ctime>
 #include <optional>
 #include <stdexcept>
@@ -38,10 +37,9 @@
 
 #include "Convert.h"
 #include "ProcessCIFF.h"
-#include "Util.h"
 #include "WriteBuffer.h"
 
-namespace fbxexport
+namespace fbx
 {
 	using namespace std;
 

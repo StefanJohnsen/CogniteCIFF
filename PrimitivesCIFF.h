@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Constants.h"
@@ -60,39 +61,125 @@ namespace ciff
 		float a = 1.0f;
 	};
 
+struct Cell
+    {
+        int64_t x = 0;
+        int64_t y = 0;
+        int64_t z = 0;
+
+        [[nodiscard]] bool operator==(const Cell& other) const noexcept;
+    };
+
+    struct CellHash
+    {
+        [[nodiscard]] size_t operator()(const Cell& cell) const noexcept;
+    };
+
+    [[nodiscard]] Cell cellOf(const Point& point) noexcept;
+    [[nodiscard]] bool equal(double a, double b) noexcept;
+    [[nodiscard]] bool equal(float a, float b) noexcept;
+    [[nodiscard]] bool samePoint(const Point& a, const Point& b) noexcept;
+    [[nodiscard]] bool sameUV(const UV2& a, const UV2& b) noexcept;
+    [[nodiscard]] bool sameColor(const RGBA4f& a, const RGBA4f& b) noexcept;
+
+    inline constexpr double pointTolerance = 1e-6;
+    inline constexpr float attributeTolerance = 1e-6f;
+
+    [[nodiscard]] constexpr double vertexTolerance() noexcept
+    {
+        return pointTolerance;
+    }
+
+    [[nodiscard]] constexpr float vertexAttributeTolerance() noexcept
+    {
+        return attributeTolerance;
+    }
+
+    struct Mesh;
+
+    struct VertexLookup
+    {
+        [[nodiscard]] uint32_t add(Mesh& mesh, const Point& point, const UV2* uv, const RGBA4f* vertexColor);
+        void clear() noexcept;
+
+      private:
+        static void validateAttributeMode(const Mesh& mesh, bool hasUV, bool hasVertexColor);
+        static [[nodiscard]] bool sameVertex(const Mesh& mesh, uint32_t index, const Point& point, const UV2* uv,
+                                      const RGBA4f* vertexColor);
+        void rebuild(const Mesh& mesh);
+
+        std::unordered_map<Cell, std::vector<uint32_t>, CellHash> buckets;
+    };
+
+    struct MeshShapeCache
+    {
+        void canonicalize(Mesh& mesh);
+        [[nodiscard]] uint64_t shapeHash(Mesh& mesh);
+        void invalidate() noexcept;
+
+      private:
+        static void apply(Mesh& mesh);
+        [[nodiscard]] static uint64_t hashCanonical(const Mesh& mesh);
+
+        uint64_t cachedShapeHash = 0;
+        bool shapeHashCached = false;
+        bool canonical = false;
+    };
+
 	struct Mesh
-	{
-		std::vector<Point> vertices;
-		std::vector<uint32_t> indices;
-		std::vector<UV2> uvs;
-		std::vector<RGBA4f> colors;
-		size_t color = 0;
+    {
+        friend struct MeshShapeCache;
 
-		[[nodiscard]] bool empty() const noexcept
-		{
-			return vertices.empty() || indices.empty();
-		}
+        [[nodiscard]] uint32_t addVertex(const Point& point);
+        [[nodiscard]] uint32_t addVertex(const Point& point, const UV2* uv, const RGBA4f* vertexColor);
 
-		[[nodiscard]] bool hasUVs() const noexcept
-		{
-			return !uvs.empty() && uvs.size() == vertices.size();
-		}
+        void appendTriangle(const Point& a, const Point& b, const Point& c);
+        void appendTriangle(const Point& a, const Point& b, const Point& c, const UV2* uvA, const UV2* uvB,
+                            const UV2* uvC, const RGBA4f* colorA, const RGBA4f* colorB, const RGBA4f* colorC);
 
-		[[nodiscard]] bool hasColors() const noexcept
-		{
-			return !colors.empty() && colors.size() == vertices.size();
-		}
+        void canonicalize();
+        [[nodiscard]] uint64_t shapeHash();
+        void invalidateShapeHash() noexcept;
 
-		[[nodiscard]] uint32_t points() const noexcept
-		{
-			return static_cast<uint32_t>(vertices.size());
-		}
+        void clearVertexLookup() noexcept;
 
-		[[nodiscard]] uint32_t triangles() const noexcept
-		{
-			return static_cast<uint32_t>(indices.size() / 3);
-		}
-	};
+		void compress() noexcept;
+
+        std::vector<Point> vertices;
+        std::vector<uint32_t> indices;
+        std::vector<UV2> uvs;
+        std::vector<RGBA4f> colors;
+        size_t color = 0;
+
+        [[nodiscard]] bool empty() const noexcept
+        {
+            return vertices.empty() || indices.empty();
+        }
+
+        [[nodiscard]] bool hasUVs() const noexcept
+        {
+            return !uvs.empty() && uvs.size() == vertices.size();
+        }
+
+        [[nodiscard]] bool hasColors() const noexcept
+        {
+            return !colors.empty() && colors.size() == vertices.size();
+        }
+
+        [[nodiscard]] uint32_t points() const noexcept
+        {
+            return static_cast<uint32_t>(vertices.size());
+        }
+
+        [[nodiscard]] uint32_t triangles() const noexcept
+        {
+            return static_cast<uint32_t>(indices.size() / 3);
+        }
+
+      private:
+        VertexLookup vertexLookup;
+        MeshShapeCache shapeCache;
+    };
 
 	struct BoundingBox final
 	{

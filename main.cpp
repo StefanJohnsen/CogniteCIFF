@@ -54,7 +54,7 @@ static bool convert(const std::string& source_cad, const std::string& target_cad
 		result = ciff::convert(data);
 		break;
 	case AutodeskFBX:
-		result = fbxexport::convert(data);
+		result = fbx::convert(data);
 		break;
 	case AvevaRVM:
 		result = rvm::convert(data);

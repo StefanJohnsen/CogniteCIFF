@@ -14,35 +14,94 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="PrimitivesCIFF.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CmdArgs.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="CmdBar.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="CmdTimer.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="Constants.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="Convert.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertCIFF.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertDAT.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertFBX.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="Convert3D.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertGLTF.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertJSON.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertOBJ.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertRVM.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ConvertTXT.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="FileType.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="PrimitivesCIFF.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="PrimitivesRVM.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ProcessCIFF.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ShapeCIFF.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="TessCIFF.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="ReadCIFF.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="StreamCIFF.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="StreamFile.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="TempFile.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="Util.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="WriteBuffer.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="WriteInflateFBX.h"><Filter>Source Files</Filter></ClInclude>
-    <ClInclude Include="WriteStatistics.h"><Filter>Source Files</Filter></ClInclude>
+    <ClInclude Include="CmdArgs.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CmdBar.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CmdTimer.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Constants.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Convert.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvertCIFF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvertDAT.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvertFBX.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Convert3D.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvertGLTF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvertJSON.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvertOBJ.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvertRVM.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvertTXT.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FileType.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PrimitivesCIFF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PrimitivesRVM.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ProcessCIFF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ShapeCIFF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TessCIFF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ReadCIFF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StreamCIFF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StreamFile.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TempFile.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Util.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WriteBuffer.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WriteInflateFBX.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WriteStatistics.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
