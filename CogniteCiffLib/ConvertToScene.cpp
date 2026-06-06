@@ -18,67 +18,14 @@
 
 #include "CmdBar.h"
 #include "Convert.h"
+#include "PrimitiveInstanceCIFF.h"
+#include "PrimitiveStatsCIFF.h"
 #include "PrimitivesCIFF.h"
-#include "ProcessCIFF.h"
 #include "ReadCIFF.h"
-#include "ShapeCIFF.h"
-#include "TessCIFF.h"
 
 namespace
 {
-    using Matrix3x4 = ciff::shape::Matrix3x4;
-
-    Matrix3x4 IdentityMatrix() noexcept
-    {
-        return Matrix3x4{
-            1.0f, 0.0f, 0.0f,
-            0.0f, 1.0f, 0.0f,
-            0.0f, 0.0f, 1.0f,
-            0.0f, 0.0f, 0.0f,
-        };
-    }
-
-    uint64_t PrimitiveHash(const ciff::Read& data, const ciff::Geometry& geom)
-    {
-        switch (geom.primitive)
-        {
-            case ciff::Type::Box:             return ciff::shape::hashOf(data.boxes[geom.primitiveIndex]);
-            case ciff::Type::Cylinder:        return ciff::shape::hashOf(data.cylinders[geom.primitiveIndex]);
-            case ciff::Type::CircularTorus:   return ciff::shape::hashOf(data.circularToruses[geom.primitiveIndex]);
-            case ciff::Type::Sphere:          return ciff::shape::hashOf(data.spheres[geom.primitiveIndex]);
-            case ciff::Type::SphericalDish:   return ciff::shape::hashOf(data.sphericalDishes[geom.primitiveIndex]);
-            case ciff::Type::GeneralCylinder: return ciff::shape::hashOf(data.generalCylinders[geom.primitiveIndex]);
-            default:                          return 0;
-        }
-    }
-
-    Matrix3x4 PrimitiveTransform(const ciff::Read& data, const ciff::Geometry& geom)
-    {
-        switch (geom.primitive)
-        {
-            case ciff::Type::Box:             return ciff::shape::instanceTransform(data.boxes[geom.primitiveIndex]);
-            case ciff::Type::Cylinder:        return ciff::shape::instanceTransform(data.cylinders[geom.primitiveIndex]);
-            case ciff::Type::CircularTorus:   return ciff::shape::instanceTransform(data.circularToruses[geom.primitiveIndex]);
-            case ciff::Type::Sphere:          return ciff::shape::instanceTransform(data.spheres[geom.primitiveIndex]);
-            case ciff::Type::SphericalDish:   return ciff::shape::instanceTransform(data.sphericalDishes[geom.primitiveIndex]);
-            case ciff::Type::GeneralCylinder: return ciff::shape::instanceTransform(data.generalCylinders[geom.primitiveIndex]);
-            default:                          return IdentityMatrix();
-        }
-    }
-
-    ciff::Mesh PrimitiveTessellate(const ciff::Read& data, const ciff::Geometry& geom)
-    {
-        switch (geom.primitive)
-        {
-            case ciff::Type::Box:             return ciff::TessellateCanonical(data.boxes[geom.primitiveIndex]);
-            case ciff::Type::Cylinder:        return ciff::TessellateCanonical(data.cylinders[geom.primitiveIndex]);
-            case ciff::Type::CircularTorus:   return ciff::TessellateCanonical(data.circularToruses[geom.primitiveIndex]);
-            case ciff::Type::Sphere:          return ciff::TessellateCanonical(data.spheres[geom.primitiveIndex]);
-            case ciff::Type::SphericalDish:   return ciff::TessellateCanonical(data.sphericalDishes[geom.primitiveIndex]);
-            case ciff::Type::GeneralCylinder: return ciff::TessellateCanonical(data.generalCylinders[geom.primitiveIndex]);
-            default:                          return {};
-        }
-    }
+    using Matrix3x4 = ciff::primitive_instance::Matrix3x4;
 
     // Builds the SceneData normal buffer used by viewers for lighting.
     // Source meshes and tessellated primitives do not always carry stable normals,
@@ -180,48 +127,34 @@ namespace
                 cancelled = true;
         }
 
-        void WriteGeometry(const ciff::Node& node, const size_t geometryIndex) override
+        void WriteGeometry(const ciff::Node&, const size_t geometryIndex) override
         {
             const auto& geom = data.geometries[geometryIndex];
             const auto material = static_cast<uint32_t>(geom.color);
+            auto form = ciff::primitive_instance::Make(data, geom);
 
-            if (geom.primitive == ciff::Type::Mesh)
-            {
-                const auto& mesh = data.getMesh(geom.mesh);
-                if (mesh.empty())
-                    return;
-
-                const auto shapeHash = ciff::shape::hashOf(mesh);
-                if (shapeHash == 0)
-                    return;
-
-                const auto formIndex = AddOrFindForm(shapeHash, mesh);
-                EmitInstance(formIndex, material, IdentityMatrix());
-                return;
-            }
-
-            const auto preHash = PrimitiveHash(data, geom);
-            const auto tx = PrimitiveTransform(data, geom);
-
+            const auto preHash = form.hash;
             if (preHash != 0)
             {
                 if (const auto it = formIndexByHash.find(preHash); it != formIndexByHash.end())
                 {
-                    EmitInstance(it->second, material, tx);
+                    primitiveStats.Record(geom, preHash);
+                    EmitInstance(it->second, material, form.transform);
                     return;
                 }
             }
 
-            auto localMesh = PrimitiveTessellate(data, geom);
+            auto localMesh = ciff::primitive_instance::Tessellate(data, geom, form);
             if (localMesh.empty())
                 return;
 
-            const auto shapeHash = preHash != 0 ? preHash : ciff::shape::hashOf(localMesh);
+            const auto shapeHash = form.hash;
             if (shapeHash == 0)
                 return;
 
             const auto formIndex = AddOrFindForm(shapeHash, std::move(localMesh));
-            EmitInstance(formIndex, material, tx);
+            primitiveStats.Record(geom, shapeHash);
+            EmitInstance(formIndex, material, form.transform);
         }
 
         void WriteMaterial(bool) override {}
@@ -230,6 +163,7 @@ namespace
         {
             CloseCurrentNode();
             EmitMaterials();
+            primitiveStats.Print(source_file);
 
             const auto total = data.nodes.size();
             if (callback)
@@ -323,6 +257,7 @@ namespace
         scene::SceneData&                              sd;
         const cifflib::ConvertProgressCallback&        callback;
         std::unordered_map<uint64_t, uint32_t>         formIndexByHash;
+        ciff::primitive_stats::Stats                   primitiveStats;
         bool                                           cancelled = false;
     };
 }

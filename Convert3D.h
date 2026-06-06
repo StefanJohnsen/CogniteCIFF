@@ -37,10 +37,9 @@
 #include <array>
 
 #include "Convert.h"
-#include "ProcessCIFF.h"
-#include "ShapeCIFF.h"
+#include "PrimitiveInstanceCIFF.h"
+#include "PrimitiveStatsCIFF.h"
 #include "TempFile.h"
-#include "TessCIFF.h"
 #include "Util.h"
 #include "WriteBuffer.h"
 
@@ -51,17 +50,7 @@ namespace f3d
 	using Matrix3x4 = std::array<float, 12>;
 
 	// Column-major (X col, Y col, Z col, T col), matching AvevaRvmDebug.
-	inline Matrix3x4 Identity3x4()
-	{
-		return Matrix3x4{
-			1.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f,
-			0.0f, 0.0f, 1.0f,
-			0.0f, 0.0f, 0.0f,
-		};
-	}
-
-	inline Matrix3x4 toF3D(const ciff::shape::Matrix3x4& m) noexcept
+	inline Matrix3x4 toF3D(const ciff::primitive_instance::Matrix3x4& m) noexcept
 	{
 		Matrix3x4 out{};
 		for (size_t i = 0; i < 12; ++i) out[i] = m[i];
@@ -246,6 +235,7 @@ namespace f3d
 			size_t operator()(const uint64_t x) const noexcept { return static_cast<size_t>(x); }
 		};
 		std::unordered_map<uint64_t, uint32_t, IdentityHash64> formIndexByHash;
+		ciff::primitive_stats::Stats primitiveStats;
 
 		std::vector<StreamValue> nodeInstanceCounts;
 		uint32_t pendingNodeFirstInstance = 0;
@@ -333,9 +323,6 @@ namespace f3d
 
 	struct Geometry
 	{
-		static uint64_t Hash(const ciff::Read& data, const ciff::Geometry& geom);
-		static Matrix3x4 Transform(const ciff::Read& data, const ciff::Geometry& geom);
-		static ciff::Mesh Tessellate(const ciff::Read& data, const ciff::Geometry& geom);
 		static void Write(Convert& convert, const ciff::Node& node, size_t geometryIndex);
 	};
 
@@ -451,114 +438,38 @@ namespace f3d
 		catalog.emittedInstanceCount++;
 	}
 
-	inline uint64_t Geometry::Hash(const ciff::Read& data, const ciff::Geometry& geom)
-	{
-		switch (geom.primitive)
-		{
-		case ciff::Type::Box:
-			return ciff::shape::hashOf(data.boxes[geom.primitiveIndex]);
-		case ciff::Type::Cylinder:
-			return ciff::shape::hashOf(data.cylinders[geom.primitiveIndex]);
-		case ciff::Type::CircularTorus:
-			return ciff::shape::hashOf(data.circularToruses[geom.primitiveIndex]);
-		case ciff::Type::Sphere:
-			return ciff::shape::hashOf(data.spheres[geom.primitiveIndex]);
-		case ciff::Type::SphericalDish:
-			return ciff::shape::hashOf(data.sphericalDishes[geom.primitiveIndex]);
-		case ciff::Type::GeneralCylinder:
-			return ciff::shape::hashOf(data.generalCylinders[geom.primitiveIndex]);
-		default:
-			return 0; // Mesh fallback hashes the tessellated mesh.
-		}
-	}
-
-	inline Matrix3x4 Geometry::Transform(const ciff::Read& data, const ciff::Geometry& geom)
-	{
-		switch (geom.primitive)
-		{
-		case ciff::Type::Box:
-			return toF3D(ciff::shape::instanceTransform(data.boxes[geom.primitiveIndex]));
-		case ciff::Type::Cylinder:
-			return toF3D(ciff::shape::instanceTransform(data.cylinders[geom.primitiveIndex]));
-		case ciff::Type::CircularTorus:
-			return toF3D(ciff::shape::instanceTransform(data.circularToruses[geom.primitiveIndex]));
-		case ciff::Type::Sphere:
-			return toF3D(ciff::shape::instanceTransform(data.spheres[geom.primitiveIndex]));
-		case ciff::Type::SphericalDish:
-			return toF3D(ciff::shape::instanceTransform(data.sphericalDishes[geom.primitiveIndex]));
-		case ciff::Type::GeneralCylinder:
-			return toF3D(ciff::shape::instanceTransform(data.generalCylinders[geom.primitiveIndex]));
-		default:
-			return Identity3x4();
-		}
-	}
-
-	inline ciff::Mesh Geometry::Tessellate(const ciff::Read& data, const ciff::Geometry& geom)
-	{
-		switch (geom.primitive)
-		{
-		case ciff::Type::Box:
-			return ciff::TessellateCanonical(data.boxes[geom.primitiveIndex]);
-		case ciff::Type::Cylinder:
-			return ciff::TessellateCanonical(data.cylinders[geom.primitiveIndex]);
-		case ciff::Type::CircularTorus:
-			return ciff::TessellateCanonical(data.circularToruses[geom.primitiveIndex]);
-		case ciff::Type::Sphere:
-			return ciff::TessellateCanonical(data.spheres[geom.primitiveIndex]);
-		case ciff::Type::SphericalDish:
-			return ciff::TessellateCanonical(data.sphericalDishes[geom.primitiveIndex]);
-		case ciff::Type::GeneralCylinder:
-			return ciff::TessellateCanonical(data.generalCylinders[geom.primitiveIndex]);
-		default:
-			return {};
-		}
-	}
-
 	inline void Geometry::Write(Convert& convert, const ciff::Node&, const size_t geometryIndex)
 	{
 		const auto& geom = convert.data.geometries[geometryIndex];
 		const auto material = static_cast<uint32_t>(geom.color);
 		auto& catalog = convert.catalog;
+		auto form = ciff::primitive_instance::Make(convert.data, geom);
 
-		if (geom.primitive == ciff::Type::Mesh)
-		{
-			const auto& mesh = convert.data.getMesh(geom.mesh);
-			if (mesh.empty())
-				return;
-
-			const auto shapeHash = ciff::shape::hashOf(mesh);
-			if (shapeHash == 0)
-				return;
-
-			const auto formIndex = FormGeometry::AddOrFind(catalog, shapeHash, mesh);
-			Instance::Emit(convert, formIndex, material, Identity3x4());
-			return;
-		}
-
-		// Parametric primitives can be deduplicated by shape parameters, so cache
-		// hits skip tessellation just like the RVM 3D path.
-		const auto preHash = Hash(convert.data, geom);
-		const auto instanceTx = Transform(convert.data, geom);
-
+		const auto preHash = form.hash;
 		if (preHash != 0)
 		{
 			const auto it = catalog.formIndexByHash.find(preHash);
 			if (it != catalog.formIndexByHash.end())
 			{
-				Instance::Emit(convert, it->second, material, instanceTx);
+				catalog.primitiveStats.Record(geom, preHash);
+				Instance::Emit(convert, it->second, material, toF3D(form.transform));
 				return;
 			}
 		}
 
-		auto localMesh = Tessellate(convert.data, geom);
+		auto localMesh = ciff::primitive_instance::Tessellate(convert.data, geom, form);
 
 		if (localMesh.empty())
 			return;
 
-		const auto shapeHash = preHash != 0 ? preHash : ciff::shape::hashOf(localMesh);
+		const auto shapeHash = form.hash;
+		if (shapeHash == 0)
+			return;
+
 		const auto formIndex = FormGeometry::AddOrFind(catalog, shapeHash, localMesh);
 
-		Instance::Emit(convert, formIndex, material, instanceTx);
+		catalog.primitiveStats.Record(geom, shapeHash);
+		Instance::Emit(convert, formIndex, material, toF3D(form.transform));
 	}
 
 	inline void Node::Close(Convert& convert)
@@ -628,6 +539,7 @@ namespace f3d
 		Materials::Write(convert);
 
 		Header::WriteSum(convert);
+		catalog.primitiveStats.Print(convert.source_file);
 
 		catalog.formTemp.reset();
 		catalog.instanceTemp.reset();

@@ -164,6 +164,8 @@
     <ClInclude Include="ConvertRVM.h" />
     <ClInclude Include="ConvertTXT.h" />
     <ClInclude Include="FileType.h" />
+    <ClInclude Include="PrimitiveInstanceCIFF.h" />
+    <ClInclude Include="PrimitiveStatsCIFF.h" />
     <ClInclude Include="PrimitivesCIFF.h" />
     <ClInclude Include="PrimitivesRVM.h" />
     <ClInclude Include="ProcessCIFF.h" />
