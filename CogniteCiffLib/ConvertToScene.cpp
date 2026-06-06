@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "CmdBar.h"
@@ -69,13 +70,13 @@ namespace
     {
         switch (geom.primitive)
         {
-            case ciff::Type::Box:             return ciff::tess::tessellate(data.boxes[geom.primitiveIndex]);
-            case ciff::Type::Cylinder:        return ciff::tess::tessellate(data.cylinders[geom.primitiveIndex]);
-            case ciff::Type::CircularTorus:   return ciff::tess::tessellate(data.circularToruses[geom.primitiveIndex]);
-            case ciff::Type::Sphere:          return ciff::tess::tessellate(data.spheres[geom.primitiveIndex]);
-            case ciff::Type::SphericalDish:   return ciff::tess::tessellate(data.sphericalDishes[geom.primitiveIndex]);
-            case ciff::Type::GeneralCylinder: return ciff::tess::tessellate(data.generalCylinders[geom.primitiveIndex]);
-            default:                          return data.getMesh(geom.mesh);
+            case ciff::Type::Box:             return ciff::TessellateCanonical(data.boxes[geom.primitiveIndex]);
+            case ciff::Type::Cylinder:        return ciff::TessellateCanonical(data.cylinders[geom.primitiveIndex]);
+            case ciff::Type::CircularTorus:   return ciff::TessellateCanonical(data.circularToruses[geom.primitiveIndex]);
+            case ciff::Type::Sphere:          return ciff::TessellateCanonical(data.spheres[geom.primitiveIndex]);
+            case ciff::Type::SphericalDish:   return ciff::TessellateCanonical(data.sphericalDishes[geom.primitiveIndex]);
+            case ciff::Type::GeneralCylinder: return ciff::TessellateCanonical(data.generalCylinders[geom.primitiveIndex]);
+            default:                          return {};
         }
     }
 
@@ -184,6 +185,21 @@ namespace
             const auto& geom = data.geometries[geometryIndex];
             const auto material = static_cast<uint32_t>(geom.color);
 
+            if (geom.primitive == ciff::Type::Mesh)
+            {
+                const auto& mesh = data.getMesh(geom.mesh);
+                if (mesh.empty())
+                    return;
+
+                const auto shapeHash = ciff::shape::hashOf(mesh);
+                if (shapeHash == 0)
+                    return;
+
+                const auto formIndex = AddOrFindForm(shapeHash, mesh);
+                EmitInstance(formIndex, material, IdentityMatrix());
+                return;
+            }
+
             const auto preHash = PrimitiveHash(data, geom);
             const auto tx = PrimitiveTransform(data, geom);
 
@@ -204,7 +220,7 @@ namespace
             if (shapeHash == 0)
                 return;
 
-            const auto formIndex = AddOrFindForm(shapeHash, localMesh);
+            const auto formIndex = AddOrFindForm(shapeHash, std::move(localMesh));
             EmitInstance(formIndex, material, tx);
         }
 
@@ -240,22 +256,43 @@ namespace
             if (const auto it = formIndexByHash.find(shapeHash); it != formIndexByHash.end())
                 return it->second;
 
-            const auto index = static_cast<uint32_t>(sd.meshes.size());
-            formIndexByHash.emplace(shapeHash, index);
+            auto sceneMesh = BuildSceneMesh(mesh);
+            sceneMesh.indices = mesh.indices;
+            return AddForm(shapeHash, std::move(sceneMesh));
+        }
 
+        uint32_t AddOrFindForm(const uint64_t shapeHash, ciff::Mesh&& mesh)
+        {
+            if (const auto it = formIndexByHash.find(shapeHash); it != formIndexByHash.end())
+                return it->second;
+
+            auto sceneMesh = BuildSceneMesh(mesh);
+            sceneMesh.indices = std::move(mesh.indices);
+            return AddForm(shapeHash, std::move(sceneMesh));
+        }
+
+        static scene::Mesh BuildSceneMesh(const ciff::Mesh& mesh)
+        {
             scene::Mesh sceneMesh;
-            sceneMesh.positions.reserve(mesh.vertices.size() * 3ULL);
-            for (const auto& v : mesh.vertices)
+            sceneMesh.positions.resize(mesh.vertices.size() * 3ULL);
+            for (size_t i = 0; i < mesh.vertices.size(); ++i)
             {
-                sceneMesh.positions.push_back(static_cast<float>(v.x));
-                sceneMesh.positions.push_back(static_cast<float>(v.y));
-                sceneMesh.positions.push_back(static_cast<float>(v.z));
+                const auto& v = mesh.vertices[i];
+                const auto base = i * 3ULL;
+                sceneMesh.positions[base + 0] = static_cast<float>(v.x);
+                sceneMesh.positions[base + 1] = static_cast<float>(v.y);
+                sceneMesh.positions[base + 2] = static_cast<float>(v.z);
             }
 
             sceneMesh.normals = GenerateVertexNormals(mesh);
-            sceneMesh.indices = mesh.indices;
+            return sceneMesh;
+        }
 
+        uint32_t AddForm(const uint64_t shapeHash, scene::Mesh&& sceneMesh)
+        {
+            const auto index = static_cast<uint32_t>(sd.meshes.size());
             sd.meshes.push_back(std::move(sceneMesh));
+            formIndexByHash.emplace(shapeHash, index);
             return index;
         }
 

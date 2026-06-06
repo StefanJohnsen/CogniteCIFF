@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -10,9 +11,7 @@
 #include "CmdBar.h"
 #include "Constants.h"
 #include "PrimitivesCIFF.h"
-#include "ShapeCIFF.h"
 #include "StreamCIFF.h"
-#include "TessCIFF.h"
 
 namespace ciff
 {
@@ -37,7 +36,7 @@ namespace ciff
     // ConvertCIFF.h. The format is derived directly from that writer
     // implementation:
     //
-    //   Header       (magic, version, four placeholders, metadata)
+    //   Header       (magic, version, four placeholders, metadata sections)
     //   Records*     (loop reading a uint8 type byte and dispatching)
     //                  type = 0  -> Footer (stop)
     //                  type = 1  -> Node
@@ -101,9 +100,9 @@ namespace ciff
         std::vector<Node> nodes;
 
         // Parametric primitive storage. Geometry::primitive selects which array
-        // the geometry's primitiveIndex refers to. Always parallel to the
-        // tessellated entry in `meshes` so downstream writers can keep using
-        // the mesh path while 3D can dedup against primitive parameters.
+        // the geometry's primitiveIndex refers to. Meshes are generated lazily by
+        // converters that need tessellated output; only Type::Mesh payloads live
+        // in `meshes`.
         std::vector<Box> boxes;
         std::vector<Cylinder> cylinders;
         std::vector<CircularTorus> circularToruses;
@@ -120,6 +119,16 @@ namespace ciff
             size_t remainingChildren = 0;
         };
 
+        static constexpr uint8_t typeCode(const Type type) noexcept
+        {
+            return static_cast<uint8_t>(type);
+        }
+
+        static constexpr int typeNumber(const Type type) noexcept
+        {
+            return static_cast<int>(typeCode(type));
+        }
+
         void readHeader(binary::Stream& stream)
         {
             header.magic = stream.read<uint32_t>();
@@ -133,7 +142,18 @@ namespace ciff
             header.placeholder3 = stream.read<uint64_t>();
             header.placeholder4 = stream.read<uint64_t>();
             header.metadataSize = stream.read<uint32_t>();
-            header.metadata = stream.readString();
+
+            // Older clone files written by this tool store a single JSON-ish
+            // metadata string after a zero count. Real CIFF files store typed
+            // metadata sections, followed by a reserved uint32.
+            if (header.metadataSize == 0)
+            {
+                header.metadata = stream.readString();
+                return;
+            }
+
+            readMetadataSections(stream, header.metadataSize);
+            (void)stream.read<uint32_t>(); // reserved / unknown
         }
 
         void readBody(binary::Stream& stream)
@@ -143,10 +163,10 @@ namespace ciff
 
             while (true)
             {
-                const auto type = stream.read<uint8_t>();
+                const auto recordType = stream.read<uint8_t>();
                 bar::step(static_cast<size_t>(stream.tell()));
 
-                switch (type)
+                switch (recordType)
                 {
                     case 0:
                         bar::stop();
@@ -157,19 +177,20 @@ namespace ciff
                     case 19:
                         readMaterial(stream);
                         break;
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 13:
-                    case 14:
-                    case 17:
-                    case 18:
-                    case 23:
+                    case typeCode(Type::Mesh):
+                    case typeCode(Type::Cylinder):
+                    case typeCode(Type::Box):
+                    case typeCode(Type::CircularTorus):
+                    case typeCode(Type::Sphere):
+                    case typeCode(Type::SphericalDish):
+                    case typeCode(Type::GeneralCylinder):
+                    case typeCode(Type::EmptyPoint):
                         // Geometry records outside a node context are skipped.
-                        skipGeometryPayload(stream, type);
+                        skipGeometryPayload(stream, static_cast<Type>(recordType));
                         break;
                     default:
-                        throw std::runtime_error("CIFF: unknown record type " + std::to_string(static_cast<int>(type)));
+                        throw std::runtime_error("CIFF: unknown record type " +
+                                                 std::to_string(static_cast<int>(recordType)));
                 }
             }
         }
@@ -242,12 +263,16 @@ namespace ciff
             const auto present = stream.read<uint8_t>();
 
             if (present)
-                throw std::runtime_error("CIFF: internal metadata not supported");
+                (void)stream.readString();
         }
 
         static void readUserMetadata(binary::Stream& stream)
         {
-            const auto sectionCount = stream.read<uint32_t>();
+            readMetadataSections(stream, stream.read<uint32_t>());
+        }
+
+        static void readMetadataSections(binary::Stream& stream, const uint32_t sectionCount)
+        {
 
             for (uint32_t i = 0; i < sectionCount; ++i)
             {
@@ -258,10 +283,44 @@ namespace ciff
                 {
                     (void)stream.readString();    // name
                     (void)stream.readString();    // unused
-                    (void)stream.read<uint8_t>(); // valueType
+                    const auto valueType = stream.read<uint8_t>();
                     (void)stream.read<uint8_t>(); // measurement
-                    (void)stream.readString();    // value
+                    readMetadataValue(stream, valueType);
                 }
+            }
+        }
+
+        static void readMetadataValue(binary::Stream& stream, const uint8_t valueType)
+        {
+            switch (valueType)
+            {
+                case 0: // string
+                    (void)stream.readString();
+                    return;
+                case 1: // bool
+                    (void)stream.read<uint8_t>();
+                    return;
+                case 2: // int32
+                    (void)stream.read<int32_t>();
+                    return;
+                case 3: // double
+                    (void)stream.read<double>();
+                    return;
+                case 4: // coordinate2, float U/V
+                    (void)stream.read<float>();
+                    (void)stream.read<float>();
+                    return;
+                case 5: // coordinate3, double X/Y/Z
+                    (void)stream.read<double>();
+                    (void)stream.read<double>();
+                    (void)stream.read<double>();
+                    return;
+                case 6: // date/time, milliseconds since epoch
+                    (void)stream.read<int64_t>();
+                    return;
+                default:
+                    throw std::runtime_error("CIFF: unsupported metadata value type " +
+                                             std::to_string(static_cast<int>(valueType)));
             }
         }
 
@@ -273,31 +332,36 @@ namespace ciff
             if (hasTransform)
                 throw std::runtime_error("CIFF: per-geometry transforms not supported");
 
-            const auto type = stream.read<uint8_t>();
+            const auto type = static_cast<Type>(stream.read<uint8_t>());
 
             switch (type)
             {
-                case 23:                           // empty geometry placeholder
-                    (void)stream.read<uint32_t>(); // pointCount = 0
-                    return max_size;
-                case 3:
+                case Type::Mesh:
                     return readMeshGeometry(stream, nodeColor);
-                case 4:
+                case Type::Cylinder:
                     return readCylinder(stream, nodeColor);
-                case 5:
+                case Type::Box:
                     return readBox(stream, nodeColor);
-                case 13:
+                case Type::CircularTorus:
                     return readCircularTorus(stream, nodeColor);
-                case 14:
+                case Type::Sphere:
                     return readSphere(stream, nodeColor);
-                case 17:
+                case Type::SphericalDish:
                     return readSphericalDish(stream, nodeColor);
-                case 18:
+                case Type::GeneralCylinder:
                     return readGeneralCylinder(stream, nodeColor);
+                case Type::EmptyPoint:
+                    return readEmpty(stream);
                 default:
                     throw std::runtime_error("CIFF: unsupported geometry type " +
-                                             std::to_string(static_cast<int>(type)));
+                                             std::to_string(typeNumber(type)));
             }
+        }
+
+        static size_t readEmpty(binary::Stream& stream)
+        {
+            (void)stream.read<uint32_t>();
+            return max_size;
         }
 
         size_t readMeshGeometry(binary::Stream& stream, const size_t nodeColor)
@@ -310,22 +374,16 @@ namespace ciff
 
             Mesh mesh;
             mesh.color = nodeColor;
-            mesh.vertices.resize(pointCount);
+            static_assert(sizeof(Point) == 3 * sizeof(double), "CIFF Point payload must be three doubles");
+            mesh.vertices = stream.readArray<Point>(pointCount);
+            mesh.indices = stream.readArray<uint32_t>(static_cast<size_t>(triangleCount) * 3);
 
-            if (pointCount > 0)
-            {
-                auto raw = stream.readArray<double>(static_cast<size_t>(pointCount) * 3);
-                for (uint32_t i = 0; i < pointCount; ++i)
-                {
-                    mesh.vertices[i] = Point{raw[3 * i + 0], raw[3 * i + 1], raw[3 * i + 2]};
-                }
-            }
-
-            if (triangleCount > 0)
-                mesh.indices = stream.readArray<uint32_t>(static_cast<size_t>(triangleCount) * 3);
+            // FacetGroup data comes from an external exporter; dedupe any
+            // coincident vertices and drop orphan ones before recording.
+            //mesh.compress();
 
             MESH.FacetGroup.record(mesh);
-            return emitGeometry(std::move(mesh), nodeColor, Type::Mesh, 0);
+            return emitMeshGeometry(std::move(mesh), nodeColor);
         }
 
         Point readPoint(binary::Stream& stream)
@@ -346,6 +404,46 @@ namespace ciff
             return v;
         }
 
+        static bool hasLength(const Point& a, const Point& b) noexcept
+        {
+            const auto dx = b.x - a.x;
+            const auto dy = b.y - a.y;
+            const auto dz = b.z - a.z;
+            return dx * dx + dy * dy + dz * dz >= 1e-24;
+        }
+
+        static bool drawable(const Box& box) noexcept
+        {
+            return std::abs(box.delta.x) >= 2e-12 ||
+                   std::abs(box.delta.y) >= 2e-12 ||
+                   std::abs(box.delta.z) >= 2e-12;
+        }
+
+        static bool drawable(const Cylinder& cyl) noexcept
+        {
+            return cyl.radius >= 1e-12 && hasLength(cyl.centerA, cyl.centerB);
+        }
+
+        static bool drawable(const CircularTorus& torus) noexcept
+        {
+            return torus.radius >= 1e-12 && torus.tubeRadius >= 1e-12;
+        }
+
+        static bool drawable(const Sphere& sphere) noexcept
+        {
+            return sphere.radius >= 1e-12;
+        }
+
+        static bool drawable(const SphericalDish& dish) noexcept
+        {
+            return dish.height >= 1e-12 && dish.horizontalRadius >= 1e-12;
+        }
+
+        static bool drawable(const GeneralCylinder& cyl) noexcept
+        {
+            return hasLength(cyl.centerA, cyl.centerB) && (cyl.radiusA >= 1e-12 || cyl.radiusB >= 1e-12);
+        }
+
         size_t readBox(binary::Stream& stream, const size_t nodeColor)
         {
             Box box;
@@ -354,13 +452,10 @@ namespace ciff
             box.center = readPoint(stream);
             box.normal = readVector(stream);
             box.record();
-
-            auto mesh = tess::tessellate(box);
-            tess::transform(mesh, shape::instanceTransform(box));
-            MESH.Box.record(mesh);
+            MESH.Box.record();
 
             boxes.emplace_back(box);
-            return emitGeometry(std::move(mesh), nodeColor, Type::Box, boxes.size() - 1);
+            return emitPrimitiveGeometry(nodeColor, Type::Box, boxes.size() - 1, drawable(box));
         }
 
         size_t readCylinder(binary::Stream& stream, const size_t nodeColor)
@@ -371,13 +466,10 @@ namespace ciff
             cyl.centerB = readPoint(stream);
             cyl.isClosed = stream.read<uint8_t>() != 0;
             cyl.record();
-
-            auto mesh = tess::tessellate(cyl);
-            tess::transform(mesh, shape::instanceTransform(cyl));
-            MESH.Cylinder.record(mesh);
+            MESH.Cylinder.record();
 
             cylinders.emplace_back(cyl);
-            return emitGeometry(std::move(mesh), nodeColor, Type::Cylinder, cylinders.size() - 1);
+            return emitPrimitiveGeometry(nodeColor, Type::Cylinder, cylinders.size() - 1, drawable(cyl));
         }
 
         size_t readCircularTorus(binary::Stream& stream, const size_t nodeColor)
@@ -391,13 +483,10 @@ namespace ciff
             t.normal = readVector(stream);
             t.isClosed = stream.read<uint8_t>() != 0;
             t.record();
-
-            auto mesh = tess::tessellate(t);
-            tess::transform(mesh, shape::instanceTransform(t));
-            MESH.CircularTorus.record(mesh);
+            MESH.CircularTorus.record();
 
             circularToruses.emplace_back(t);
-            return emitGeometry(std::move(mesh), nodeColor, Type::CircularTorus, circularToruses.size() - 1);
+            return emitPrimitiveGeometry(nodeColor, Type::CircularTorus, circularToruses.size() - 1, drawable(t));
         }
 
         size_t readSphere(binary::Stream& stream, const size_t nodeColor)
@@ -406,13 +495,10 @@ namespace ciff
             s.radius = stream.read<double>();
             s.center = readPoint(stream);
             s.record();
-
-            auto mesh = tess::tessellate(s);
-            tess::transform(mesh, shape::instanceTransform(s));
-            MESH.Sphere.record(mesh);
+            MESH.Sphere.record();
 
             spheres.emplace_back(s);
-            return emitGeometry(std::move(mesh), nodeColor, Type::Sphere, spheres.size() - 1);
+            return emitPrimitiveGeometry(nodeColor, Type::Sphere, spheres.size() - 1, drawable(s));
         }
 
         size_t readSphericalDish(binary::Stream& stream, const size_t nodeColor)
@@ -425,13 +511,10 @@ namespace ciff
             d.normal = readVector(stream);
             d.isClosed = stream.read<uint8_t>() != 0;
             d.record();
-
-            auto mesh = tess::tessellate(d);
-            tess::transform(mesh, shape::instanceTransform(d));
-            MESH.SphericalDish.record(mesh);
+            MESH.SphericalDish.record();
 
             sphericalDishes.emplace_back(d);
-            return emitGeometry(std::move(mesh), nodeColor, Type::SphericalDish, sphericalDishes.size() - 1);
+            return emitPrimitiveGeometry(nodeColor, Type::SphericalDish, sphericalDishes.size() - 1, drawable(d));
         }
 
         size_t readGeneralCylinder(binary::Stream& stream, const size_t nodeColor)
@@ -450,16 +533,13 @@ namespace ciff
             g.centerB = readPoint(stream);
             g.isClosed = stream.read<uint8_t>() != 0;
             g.record();
-
-            auto mesh = tess::tessellate(g);
-            tess::transform(mesh, shape::instanceTransform(g));
-            MESH.GeneralCylinder.record(mesh);
+            MESH.GeneralCylinder.record();
 
             generalCylinders.emplace_back(g);
-            return emitGeometry(std::move(mesh), nodeColor, Type::GeneralCylinder, generalCylinders.size() - 1);
+            return emitPrimitiveGeometry(nodeColor, Type::GeneralCylinder, generalCylinders.size() - 1, drawable(g));
         }
 
-        size_t emitGeometry(Mesh&& mesh, const size_t nodeColor, const Type primitive, const size_t primitiveIndex)
+        size_t emitMeshGeometry(Mesh&& mesh, const size_t nodeColor)
         {
             if (mesh.empty())
                 return max_size;
@@ -470,52 +550,57 @@ namespace ciff
             Geometry geometry{};
             geometry.color = nodeColor;
             geometry.mesh = meshes.size() - 1;
+            geometry.primitive = Type::Mesh;
+            geometries.emplace_back(geometry);
+            return geometries.size() - 1;
+        }
+
+        size_t emitPrimitiveGeometry(const size_t nodeColor, const Type primitive, const size_t primitiveIndex,
+                                     const bool isDrawable)
+        {
+            if (!isDrawable)
+                return max_size;
+
+            Geometry geometry{};
+            geometry.color = nodeColor;
             geometry.primitive = primitive;
             geometry.primitiveIndex = primitiveIndex;
             geometries.emplace_back(geometry);
             return geometries.size() - 1;
         }
 
-        static void skipGeometryPayload(binary::Stream& stream, const uint8_t type)
+        static void skipGeometryPayload(binary::Stream& stream, const Type type)
         {
-            if (type == 23)
-            {
-                (void)stream.read<uint32_t>(); // pointCount = 0
-                return;
-            }
-
-            if (type == 3)
-            {
-                (void)stream.read<uint32_t>(); // meshCount
-                const auto byteCount = stream.read<uint32_t>();
-                stream.skip(static_cast<size_t>(byteCount));
-                return;
-            }
-
-            // Parametric primitives have fixed-size payloads on disk.
             switch (type)
             {
-                case 4: // Cylinder: 1 + 3 + 3 doubles + bool
+                case Type::EmptyPoint:
+                    (void)readEmpty(stream);
+                    return;
+                case Type::Mesh:
+                    (void)stream.read<uint32_t>();
+                    stream.skip(static_cast<size_t>(stream.read<uint32_t>()));
+                    return;
+                case Type::Cylinder:
                     stream.skip(7 * sizeof(double) + sizeof(uint8_t));
                     return;
-                case 5: // Box: 1 + 3 + 3 + 3 doubles
+                case Type::Box:
                     stream.skip(10 * sizeof(double));
                     return;
-                case 13: // CircularTorus: 4 + 3 + 3 doubles + bool
+                case Type::CircularTorus:
                     stream.skip(10 * sizeof(double) + sizeof(uint8_t));
                     return;
-                case 14: // Sphere: 1 + 3 doubles
+                case Type::Sphere:
                     stream.skip(4 * sizeof(double));
                     return;
-                case 17: // SphericalDish: 3 + 3 + 3 doubles + bool
+                case Type::SphericalDish:
                     stream.skip(9 * sizeof(double) + sizeof(uint8_t));
                     return;
-                case 18: // GeneralCylinder: 9 + 3 + 3 doubles + bool
+                case Type::GeneralCylinder:
                     stream.skip(15 * sizeof(double) + sizeof(uint8_t));
                     return;
                 default:
                     throw std::runtime_error("CIFF: cannot skip unknown geometry type " +
-                                             std::to_string(static_cast<int>(type)));
+                                             std::to_string(typeNumber(type)));
             }
         }
 

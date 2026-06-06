@@ -251,25 +251,45 @@ namespace ciff
 			const uint32_t slices = 24;
 			const double r = sphere.radius;
 
-			mesh.vertices.reserve((stacks + 1) * (slices + 1));
+			// Layout: [northPole, ring(1)*slices, ..., ring(stacks-1)*slices, southPole].
+			// Poles are single vertices and longitude seam is closed by wrapping j.
+			mesh.vertices.reserve(2 + static_cast<size_t>(stacks - 1) * slices);
 
-			for (uint32_t i = 0; i <= stacks; ++i)
+			const uint32_t northPole = static_cast<uint32_t>(mesh.vertices.size());
+			mesh.vertices.push_back(Point{ 0.0, 0.0, r });
+
+			for (uint32_t i = 1; i < stacks; ++i)
 			{
 				const double phi = pi * static_cast<double>(i) / stacks;
 				const double sp = std::sin(phi);
 				const double cp = std::cos(phi);
-				for (uint32_t j = 0; j <= slices; ++j)
+				for (uint32_t j = 0; j < slices; ++j)
 				{
 					const double th = twoPi * static_cast<double>(j) / slices;
 					mesh.vertices.push_back(Point{ r * sp * std::cos(th), r * sp * std::sin(th), r * cp });
 				}
 			}
 
-			const auto idx = [slices](uint32_t i, uint32_t j) { return i * (slices + 1) + j; };
+			const uint32_t southPole = static_cast<uint32_t>(mesh.vertices.size());
+			mesh.vertices.push_back(Point{ 0.0, 0.0, -r });
 
-			for (uint32_t i = 0; i < stacks; ++i)
+			const auto ring = [slices, northPole](uint32_t i, uint32_t j) -> uint32_t
+			{
+				return northPole + 1 + (i - 1) * slices + (j % slices);
+			};
+
+			// Top cap fan (degenerate-quad reduction: north + ring(1)).
+			for (uint32_t j = 0; j < slices; ++j)
+				emitTri(mesh, northPole, ring(1, j), ring(1, j + 1));
+
+			// Middle bands.
+			for (uint32_t i = 1; i + 1 < stacks; ++i)
 				for (uint32_t j = 0; j < slices; ++j)
-					emitQuad(mesh, idx(i, j), idx(i + 1, j), idx(i + 1, j + 1), idx(i, j + 1));
+					emitQuad(mesh, ring(i, j), ring(i + 1, j), ring(i + 1, j + 1), ring(i, j + 1));
+
+			// Bottom cap fan (south + ring(stacks-1)).
+			for (uint32_t j = 0; j < slices; ++j)
+				emitTri(mesh, southPole, ring(stacks - 1, j + 1), ring(stacks - 1, j));
 
 			return mesh;
 		}
@@ -289,9 +309,11 @@ namespace ciff
 			const double zA = -0.5 * h;
 			const double zB = +0.5 * h;
 
-			mesh.vertices.reserve((slices + 1) * 2 + (cyl.isClosed ? 2 : 0));
+			// Use `slices` unique angular samples (no seam duplicate) and close the
+			// loop with wrap().
+			mesh.vertices.reserve(static_cast<size_t>(slices) * 2 + (cyl.isClosed ? 2 : 0));
 
-			for (uint32_t j = 0; j <= slices; ++j)
+			for (uint32_t j = 0; j < slices; ++j)
 			{
 				const double th = twoPi * static_cast<double>(j) / slices;
 				const double cx = cyl.radius * std::cos(th);
@@ -300,12 +322,15 @@ namespace ciff
 				mesh.vertices.push_back(Point{ cx, sy, zB });
 			}
 
+			const auto wrap = [slices](uint32_t j) { return j % slices; };
+
 			for (uint32_t j = 0; j < slices; ++j)
 			{
+				const uint32_t j1 = wrap(j + 1);
 				const uint32_t i00 = 2 * j;
 				const uint32_t i10 = 2 * j + 1;
-				const uint32_t i01 = 2 * (j + 1);
-				const uint32_t i11 = 2 * (j + 1) + 1;
+				const uint32_t i01 = 2 * j1;
+				const uint32_t i11 = 2 * j1 + 1;
 				emitQuad(mesh, i00, i01, i11, i10);
 			}
 
@@ -318,8 +343,9 @@ namespace ciff
 
 				for (uint32_t j = 0; j < slices; ++j)
 				{
-					emitTri(mesh, centerA, 2 * (j + 1), 2 * j);
-					emitTri(mesh, centerB, 2 * j + 1, 2 * (j + 1) + 1);
+					const uint32_t j1 = wrap(j + 1);
+					emitTri(mesh, centerA, 2 * j1, 2 * j);
+					emitTri(mesh, centerB, 2 * j + 1, 2 * j1 + 1);
 				}
 			}
 
@@ -347,14 +373,19 @@ namespace ciff
 
 			const uint32_t segLong  = arcSegments(offset + minor, sweep);
 			const uint32_t segShort = arcSegments(minor, twoPi);
-			const uint32_t samplesL = segLong + 1; // wedge ends; full torus closes via wrap
+			// Full sweep: `segLong` rings closed via u-wrap (no first/last duplicate).
+			// Partial sweep: `segLong + 1` rings; caps reuse the first/last cross-
+			// section ring instead of duplicating it.
+			const uint32_t samplesL = full ? segLong : (segLong + 1);
 			const uint32_t samplesS = segShort;
 
 			mesh.vertices.reserve(static_cast<size_t>(samplesL) * samplesS);
 
 			for (uint32_t u = 0; u < samplesL; ++u)
 			{
-				const double a = sweep * static_cast<double>(u) / static_cast<double>(samplesL - 1);
+				const double a = full
+					? sweep * static_cast<double>(u) / static_cast<double>(samplesL)
+					: sweep * static_cast<double>(u) / static_cast<double>(samplesL - 1);
 				const double cu = std::cos(a);
 				const double su = std::sin(a);
 				for (uint32_t v = 0; v < samplesS; ++v)
@@ -367,43 +398,36 @@ namespace ciff
 				}
 			}
 
-			for (uint32_t u = 0; u + 1 < samplesL; ++u)
+			const uint32_t spans = full ? samplesL : (samplesL - 1);
+			const auto uWrap = [&](uint32_t u) -> uint32_t { return full ? (u % samplesL) : u; };
+
+			for (uint32_t u = 0; u < spans; ++u)
 			{
+				const uint32_t u0 = u;
+				const uint32_t u1 = uWrap(u + 1);
 				for (uint32_t v = 0; v < samplesS; ++v)
 				{
 					const uint32_t vn  = (v + 1) % samplesS;
-					const uint32_t i00 = u * samplesS + v;
-					const uint32_t i10 = (u + 1) * samplesS + v;
-					const uint32_t i11 = (u + 1) * samplesS + vn;
-					const uint32_t i01 = u * samplesS + vn;
+					const uint32_t i00 = u0 * samplesS + v;
+					const uint32_t i10 = u1 * samplesS + v;
+					const uint32_t i11 = u1 * samplesS + vn;
+					const uint32_t i01 = u0 * samplesS + vn;
 
 					emitTri(mesh, i00, i10, i11);
 					emitTri(mesh, i00, i11, i01);
 				}
 			}
 
-			// End caps for non-full sweep.
+			// End caps for non-full sweep: triangle-fan over existing first/last
+			// cross-section ring; the ring is planar so any ring vertex works as
+			// the fan apex (no new vertices needed).
 			if (!full && t.isClosed && samplesS >= 3)
 			{
-				const uint32_t base0 = static_cast<uint32_t>(mesh.vertices.size());
-				for (uint32_t v = 0; v < samplesS; ++v)
-				{
-					const double b = twoPi * static_cast<double>(v) / samplesS;
-					const double r = minor * std::cos(b) + offset;
-					mesh.vertices.push_back(Point{ r, 0.0, minor * std::sin(b) });
-				}
+				const uint32_t base0 = 0;
 				for (uint32_t v = 1; v + 1 < samplesS; ++v)
 					emitTri(mesh, base0, base0 + v + 1, base0 + v);
 
-				const uint32_t base1 = static_cast<uint32_t>(mesh.vertices.size());
-				const double cu = std::cos(sweep);
-				const double su = std::sin(sweep);
-				for (uint32_t v = 0; v < samplesS; ++v)
-				{
-					const double b = twoPi * static_cast<double>(v) / samplesS;
-					const double r = minor * std::cos(b) + offset;
-					mesh.vertices.push_back(Point{ r * cu, r * su, minor * std::sin(b) });
-				}
+				const uint32_t base1 = (samplesL - 1) * samplesS;
 				for (uint32_t v = 1; v + 1 < samplesS; ++v)
 					emitTri(mesh, base1, base1 + v, base1 + v + 1);
 			}
@@ -423,9 +447,14 @@ namespace ciff
 			const uint32_t stacks = 12;
 			const uint32_t slices = 24;
 
-			mesh.vertices.reserve((stacks + 1) * (slices + 1));
+			// Layout: [apex, ring(1)*slices, ..., ring(stacks)*slices]. Apex is a
+			// single vertex; longitude seam is closed by wrapping j.
+			mesh.vertices.reserve(1 + static_cast<size_t>(stacks) * slices);
 
-			for (uint32_t i = 0; i <= stacks; ++i)
+			const uint32_t apex = static_cast<uint32_t>(mesh.vertices.size());
+			mesh.vertices.push_back(Point{ 0.0, 0.0, d.verticalRadius });
+
+			for (uint32_t i = 1; i <= stacks; ++i)
 			{
 				const double tt  = static_cast<double>(i) / stacks; // 0 = apex, 1 = base
 				const double phi = 0.5 * pi * tt;
@@ -434,18 +463,26 @@ namespace ciff
 				const double rh  = d.horizontalRadius * sp;
 				const double zv  = d.verticalRadius * cp;
 
-				for (uint32_t j = 0; j <= slices; ++j)
+				for (uint32_t j = 0; j < slices; ++j)
 				{
 					const double th = twoPi * static_cast<double>(j) / slices;
 					mesh.vertices.push_back(Point{ rh * std::cos(th), rh * std::sin(th), zv });
 				}
 			}
 
-			const auto idx = [slices](uint32_t i, uint32_t j) { return i * (slices + 1) + j; };
+			const auto ring = [slices, apex](uint32_t i, uint32_t j) -> uint32_t
+			{
+				return apex + 1 + (i - 1) * slices + (j % slices);
+			};
 
-			for (uint32_t i = 0; i < stacks; ++i)
+			// Apex fan to ring(1).
+			for (uint32_t j = 0; j < slices; ++j)
+				emitTri(mesh, apex, ring(1, j + 1), ring(1, j));
+
+			// Middle bands.
+			for (uint32_t i = 1; i < stacks; ++i)
 				for (uint32_t j = 0; j < slices; ++j)
-					emitQuad(mesh, idx(i, j), idx(i, j + 1), idx(i + 1, j + 1), idx(i + 1, j));
+					emitQuad(mesh, ring(i, j), ring(i, j + 1), ring(i + 1, j + 1), ring(i + 1, j));
 
 			return mesh;
 		}
@@ -470,44 +507,90 @@ namespace ciff
 			const double zA = -0.5 * h;
 			const double zB = +0.5 * h;
 
-			mesh.vertices.reserve(static_cast<size_t>(segVerts) * 2 + (g.isClosed ? 2 : 0));
+			// Snout / cone tip: a degenerate end is emitted as a single apex vertex
+			// instead of `segVerts` coincident copies.
+			const bool tipA = g.radiusA < 1e-12;
+			const bool tipB = g.radiusB < 1e-12;
 
-			for (uint32_t j = 0; j < segVerts; ++j)
+			mesh.vertices.reserve(
+				(tipA ? 1u : segVerts) +
+				(tipB ? 1u : segVerts) +
+				(g.isClosed ? 2u : 0u));
+
+			const auto pushRing = [&](double radius, double z) -> uint32_t
 			{
-				const double frac = static_cast<double>(j) / static_cast<double>(slices);
-				const double th   = full ? twoPi * frac : sweep * frac;
-				const double cx   = std::cos(th);
-				const double sy   = std::sin(th);
-				mesh.vertices.push_back(Point{ g.radiusA * cx, g.radiusA * sy, zA });
-				mesh.vertices.push_back(Point{ g.radiusB * cx, g.radiusB * sy, zB });
+				const uint32_t base = static_cast<uint32_t>(mesh.vertices.size());
+				for (uint32_t j = 0; j < segVerts; ++j)
+				{
+					const double frac = static_cast<double>(j) / static_cast<double>(slices);
+					const double th = full ? twoPi * frac : sweep * frac;
+					mesh.vertices.push_back(Point{ radius * std::cos(th), radius * std::sin(th), z });
+				}
+				return base;
+			};
+
+			uint32_t tipAIndex = 0, tipBIndex = 0;
+			uint32_t baseA = 0, baseB = 0;
+
+			if (tipA)
+			{
+				tipAIndex = static_cast<uint32_t>(mesh.vertices.size());
+				mesh.vertices.push_back(Point{ 0.0, 0.0, zA });
+			}
+			else
+			{
+				baseA = pushRing(g.radiusA, zA);
+			}
+
+			if (tipB)
+			{
+				tipBIndex = static_cast<uint32_t>(mesh.vertices.size());
+				mesh.vertices.push_back(Point{ 0.0, 0.0, zB });
+			}
+			else
+			{
+				baseB = pushRing(g.radiusB, zB);
 			}
 
 			const auto wrap = [&](uint32_t j) { return full ? (j % slices) : j; };
 
+			// Side: quad strip in the normal case, triangle fan when one end is a tip.
 			for (uint32_t j = 0; j < slices; ++j)
 			{
-				const uint32_t j0  = wrap(j);
-				const uint32_t j1  = wrap(j + 1);
-				const uint32_t i00 = 2 * j0;
-				const uint32_t i10 = 2 * j0 + 1;
-				const uint32_t i01 = 2 * j1;
-				const uint32_t i11 = 2 * j1 + 1;
-				emitQuad(mesh, i00, i01, i11, i10);
+				const uint32_t j0 = wrap(j);
+				const uint32_t j1 = wrap(j + 1);
+
+				if (tipA)
+					emitTri(mesh, tipAIndex, baseB + j1, baseB + j0);
+				else if (tipB)
+					emitTri(mesh, tipBIndex, baseA + j0, baseA + j1);
+				else
+					emitQuad(mesh, baseA + j0, baseA + j1, baseB + j1, baseB + j0);
 			}
 
 			if (g.isClosed)
 			{
-				const uint32_t centerA = static_cast<uint32_t>(mesh.vertices.size());
-				mesh.vertices.push_back(Point{ 0.0, 0.0, zA });
-				const uint32_t centerB = static_cast<uint32_t>(mesh.vertices.size());
-				mesh.vertices.push_back(Point{ 0.0, 0.0, zB });
-
-				for (uint32_t j = 0; j < slices; ++j)
+				if (!tipA)
 				{
-					const uint32_t j0 = wrap(j);
-					const uint32_t j1 = wrap(j + 1);
-					emitTri(mesh, centerA, 2 * j1, 2 * j0);
-					emitTri(mesh, centerB, 2 * j0 + 1, 2 * j1 + 1);
+					const uint32_t centerA = static_cast<uint32_t>(mesh.vertices.size());
+					mesh.vertices.push_back(Point{ 0.0, 0.0, zA });
+					for (uint32_t j = 0; j < slices; ++j)
+					{
+						const uint32_t j0 = wrap(j);
+						const uint32_t j1 = wrap(j + 1);
+						emitTri(mesh, centerA, baseA + j1, baseA + j0);
+					}
+				}
+				if (!tipB)
+				{
+					const uint32_t centerB = static_cast<uint32_t>(mesh.vertices.size());
+					mesh.vertices.push_back(Point{ 0.0, 0.0, zB });
+					for (uint32_t j = 0; j < slices; ++j)
+					{
+						const uint32_t j0 = wrap(j);
+						const uint32_t j1 = wrap(j + 1);
+						emitTri(mesh, centerB, baseB + j0, baseB + j1);
+					}
 				}
 			}
 

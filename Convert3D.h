@@ -272,19 +272,22 @@ namespace f3d
 			f3d::write(w, mesh.points());
 
 			// vertices as float32 (3 per point)
-			std::vector<float> vbuf;
-			vbuf.reserve(mesh.vertices.size() * 3);
-			for (const auto& p : mesh.vertices)
+			std::vector<float> vbuf(mesh.vertices.size() * 3ULL);
+			for (size_t i = 0; i < mesh.vertices.size(); ++i)
 			{
-				vbuf.push_back(static_cast<float>(p.x));
-				vbuf.push_back(static_cast<float>(p.y));
-				vbuf.push_back(static_cast<float>(p.z));
+				const auto& p = mesh.vertices[i];
+				const auto base = i * 3ULL;
+				vbuf[base + 0] = static_cast<float>(p.x);
+				vbuf[base + 1] = static_cast<float>(p.y);
+				vbuf[base + 2] = static_cast<float>(p.z);
 			}
-			w.write(vbuf.data(), vbuf.size());
+			if (!vbuf.empty())
+				w.write(vbuf.data(), vbuf.size());
 
 			// per-vertex smoothed normals
 			const auto normals = GenerateVertexNormals(mesh);
-			w.write(normals.data(), normals.size());
+			if (!normals.empty())
+				w.write(normals.data(), normals.size());
 
 			f3d::write(w, mesh.triangles());
 			f3d::write(w, mesh.indices);
@@ -495,19 +498,19 @@ namespace f3d
 		switch (geom.primitive)
 		{
 		case ciff::Type::Box:
-			return ciff::tess::tessellate(data.boxes[geom.primitiveIndex]);
+			return ciff::TessellateCanonical(data.boxes[geom.primitiveIndex]);
 		case ciff::Type::Cylinder:
-			return ciff::tess::tessellate(data.cylinders[geom.primitiveIndex]);
+			return ciff::TessellateCanonical(data.cylinders[geom.primitiveIndex]);
 		case ciff::Type::CircularTorus:
-			return ciff::tess::tessellate(data.circularToruses[geom.primitiveIndex]);
+			return ciff::TessellateCanonical(data.circularToruses[geom.primitiveIndex]);
 		case ciff::Type::Sphere:
-			return ciff::tess::tessellate(data.spheres[geom.primitiveIndex]);
+			return ciff::TessellateCanonical(data.spheres[geom.primitiveIndex]);
 		case ciff::Type::SphericalDish:
-			return ciff::tess::tessellate(data.sphericalDishes[geom.primitiveIndex]);
+			return ciff::TessellateCanonical(data.sphericalDishes[geom.primitiveIndex]);
 		case ciff::Type::GeneralCylinder:
-			return ciff::tess::tessellate(data.generalCylinders[geom.primitiveIndex]);
+			return ciff::TessellateCanonical(data.generalCylinders[geom.primitiveIndex]);
 		default:
-			return data.getMesh(geom.mesh);
+			return {};
 		}
 	}
 
@@ -516,6 +519,21 @@ namespace f3d
 		const auto& geom = convert.data.geometries[geometryIndex];
 		const auto material = static_cast<uint32_t>(geom.color);
 		auto& catalog = convert.catalog;
+
+		if (geom.primitive == ciff::Type::Mesh)
+		{
+			const auto& mesh = convert.data.getMesh(geom.mesh);
+			if (mesh.empty())
+				return;
+
+			const auto shapeHash = ciff::shape::hashOf(mesh);
+			if (shapeHash == 0)
+				return;
+
+			const auto formIndex = FormGeometry::AddOrFind(catalog, shapeHash, mesh);
+			Instance::Emit(convert, formIndex, material, Identity3x4());
+			return;
+		}
 
 		// Parametric primitives can be deduplicated by shape parameters, so cache
 		// hits skip tessellation just like the RVM 3D path.

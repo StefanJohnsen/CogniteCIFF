@@ -284,17 +284,15 @@ namespace ciff
         if (!mesh.colors.empty() && !keepColors)
             throw std::logic_error("Cannot canonicalize mesh with partial color data");
 
-        // Validate indices up front (compress silently skips out-of-bounds in its
-        // used-mark pass; canonicalization must be strict).
+        // Validate indices up front. All ingress paths (tess::tessellate and
+        // readMeshGeometry) are expected to deliver clean meshes (no duplicates,
+        // no out-of-bounds indices); canonicalization is purely a reorder.
         const auto vertexCount = mesh.vertices.size();
         for (const auto idx : mesh.indices)
         {
             if (idx >= vertexCount)
                 throw std::logic_error("Cannot canonicalize mesh with out-of-bounds index");
         }
-
-        // Dedupe vertices (tolerance-based) and drop any that are not referenced.
-        mesh.compress();
 
         // Sort vertices into a canonical order so identical shapes produce
         // identical hashes regardless of insertion order.
@@ -388,7 +386,6 @@ namespace ciff
 
     uint32_t Mesh::addVertex(const Point& point, const UV2* uv, const RGBA4f* vertexColor)
     {
-        invalidateShapeHash();
         return vertexLookup.add(*this, point, uv, vertexColor);
     }
 

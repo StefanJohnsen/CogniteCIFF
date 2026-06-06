@@ -445,16 +445,14 @@ struct Cell
 		ciff::GeneralCylinder GeneralCylinder;
 	};
 
-	// Geometry references the tessellated Mesh (in Read::meshes) AND the
-	// originating primitive parameters (if any). The primitive index points
-	// into the corresponding typed array in Read (boxes, cylinders, etc.)
-	// when `primitive` is one of the parametric types. For Type::Mesh the
-	// primitiveIndex is unused. For Type::EmptyPoint the geometry has no
-	// payload and is typically dropped at parse time.
+	// Geometry references either mesh payload read from disk or the originating
+	// parametric primitive. Type::Mesh uses `mesh` as an index into Read::meshes.
+	// Parametric types use `primitiveIndex` into the matching Read::<typed> array
+	// and are tessellated lazily by the converter that needs a mesh.
 	struct Geometry
 	{
 		size_t color          = 0;
-		size_t mesh           = 0;            // index into Read::meshes
+		size_t mesh           = max_size;     // index into Read::meshes for Type::Mesh
 		Type   primitive      = Type::Mesh;   // discriminator for the source primitive
 		size_t primitiveIndex = 0;            // index into the matching Read::<typed> array
 	};

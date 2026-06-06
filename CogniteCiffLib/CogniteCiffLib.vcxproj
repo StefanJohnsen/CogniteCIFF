@@ -81,6 +81,7 @@
 
   <ItemGroup>
     <ClCompile Include="ConvertToScene.cpp" />
+    <ClCompile Include="..\PrimitivesCIFF.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ConvertToScene.h" />

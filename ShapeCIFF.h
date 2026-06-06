@@ -126,11 +126,12 @@ namespace ciff
 
 		inline uint64_t hashOf(const Box& b) noexcept
 		{
+			const auto local = canonicalize(b);
 			uint64_t h = seed(Type::Box);
 			const int64_t q[3] = {
-				quantize(std::abs(b.delta.x)),
-				quantize(std::abs(b.delta.y)),
-				quantize(std::abs(b.delta.z)),
+				quantize(local.delta.x),
+				quantize(local.delta.y),
+				quantize(local.delta.z),
 			};
 			return fnv1a(q, sizeof(q), h);
 		}
@@ -166,11 +167,12 @@ namespace ciff
 
 		inline uint64_t hashOf(const Cylinder& c) noexcept
 		{
+			const auto local = canonicalize(c);
 			uint64_t h = seed(Type::Cylinder);
 			const int64_t q[3] = {
-				quantize(c.radius),
-				quantize(cylinderHeight(c)),
-				static_cast<int64_t>(c.isClosed ? 1 : 0),
+				quantize(local.radius),
+				quantize(cylinderHeight(local)),
+				static_cast<int64_t>(local.isClosed ? 1 : 0),
 			};
 			return fnv1a(q, sizeof(q), h);
 		}
@@ -193,8 +195,9 @@ namespace ciff
 
 		inline uint64_t hashOf(const Sphere& s) noexcept
 		{
+			const auto local = canonicalize(s);
 			uint64_t h = seed(Type::Sphere);
-			const int64_t q = quantize(s.radius);
+			const int64_t q = quantize(local.radius);
 			return fnv1a(&q, sizeof(q), h);
 		}
 
@@ -221,14 +224,15 @@ namespace ciff
 
 		inline uint64_t hashOf(const CircularTorus& t) noexcept
 		{
+			const auto local = canonicalize(t);
 			uint64_t h = seed(Type::CircularTorus);
 			// Match tessellate(): arcAngle == 0 on disk encodes a full sweep.
-			const double sweep = (std::abs(t.arcAngle) < 1e-9) ? (2.0 * 3.14159265358979323846) : t.arcAngle;
+			const double sweep = (std::abs(local.arcAngle) < 1e-9) ? (2.0 * 3.14159265358979323846) : local.arcAngle;
 			const int64_t q[4] = {
-				quantize(t.radius),
-				quantize(t.tubeRadius),
+				quantize(local.radius),
+				quantize(local.tubeRadius),
 				quantize(sweep),
-				static_cast<int64_t>(t.isClosed ? 1 : 0),
+				static_cast<int64_t>(local.isClosed ? 1 : 0),
 			};
 			return fnv1a(q, sizeof(q), h);
 		}
@@ -255,12 +259,13 @@ namespace ciff
 
 		inline uint64_t hashOf(const SphericalDish& d) noexcept
 		{
+			const auto local = canonicalize(d);
 			uint64_t h = seed(Type::SphericalDish);
 			const int64_t q[4] = {
-				quantize(d.verticalRadius),
-				quantize(d.horizontalRadius),
-				quantize(d.height),
-				static_cast<int64_t>(d.isClosed ? 1 : 0),
+				quantize(local.verticalRadius),
+				quantize(local.horizontalRadius),
+				quantize(local.height),
+				static_cast<int64_t>(local.isClosed ? 1 : 0),
 			};
 			return fnv1a(q, sizeof(q), h);
 		}
@@ -304,18 +309,19 @@ namespace ciff
 
 		inline uint64_t hashOf(const GeneralCylinder& g) noexcept
 		{
+			const auto local = canonicalize(g);
 			uint64_t h = seed(Type::GeneralCylinder);
 			const int64_t q[10] = {
-				quantize(g.radiusA),
-				quantize(g.radiusB),
-				quantize(g.slopeA),
-				quantize(g.slopeB),
-				quantize(g.zAngleA),
-				quantize(g.zAngleB),
-				quantize(g.arcAngle),
-				quantize(g.thickness),
-				quantize(generalCylinderHeight(g)),
-				static_cast<int64_t>(g.isClosed ? 1 : 0),
+				quantize(local.radiusA),
+				quantize(local.radiusB),
+				quantize(local.slopeA),
+				quantize(local.slopeB),
+				quantize(local.zAngleA),
+				quantize(local.zAngleB),
+				quantize(local.arcAngle),
+				quantize(local.thickness),
+				quantize(generalCylinderHeight(local)),
+				static_cast<int64_t>(local.isClosed ? 1 : 0),
 			};
 			return fnv1a(q, sizeof(q), h);
 		}
