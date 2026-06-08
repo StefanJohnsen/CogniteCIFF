@@ -126,13 +126,6 @@ namespace f3d
 		value.writeAt(w);
 	}
 
-	struct VertexF
-	{
-		float x = 0.0f;
-		float y = 0.0f;
-		float z = 0.0f;
-	};
-
 	// Builds the .3d normal buffer used by viewers for lighting.
 	// Source meshes and tessellated primitives do not always carry stable normals,
 	// so derive smooth per-vertex normals from area-weighted triangle normals here.
