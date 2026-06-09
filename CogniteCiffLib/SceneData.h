@@ -5,7 +5,7 @@
 // Shared scene contract between every Convert*-pipeline (FBX/RVM/CIFF/.3d)
 // and the 3DViewer. Header-only. No DirectX, no Windows, no I/O. Pure data.
 //
-// Designed so that vertex/normal/index arrays can be read directly from disk
+// Designed so that vertex/index arrays can be read directly from disk
 // (one ReadExact per array) and uploaded directly to GPU buffers (memcpy).
 //
 // NOTE: This file is intentionally duplicated across:
@@ -35,7 +35,6 @@ namespace scene
     struct Mesh
     {
         std::vector<float>         positions;   // 3 * pointCount (x,y,z,...)
-        std::vector<float>         normals;     // 3 * pointCount, empty if not provided
         std::vector<std::uint32_t> indices;     // 3 * triangleCount
     };
 

@@ -25,10 +25,8 @@
 
 #pragma once
 
-#include <cmath>
 #include <cstdint>
 #include <filesystem>
-#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -126,67 +124,6 @@ namespace f3d
 		value.writeAt(w);
 	}
 
-	// Builds the .3d normal buffer used by viewers for lighting.
-	// Source meshes and tessellated primitives do not always carry stable normals,
-	// so derive smooth per-vertex normals from area-weighted triangle normals here.
-	inline std::vector<float> GenerateVertexNormals(const ciff::Mesh& mesh)
-	{
-		std::vector<float> normals(static_cast<std::size_t>(mesh.points()) * 3ULL, 0.0f);
-
-		for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
-		{
-			const auto i0 = mesh.indices[i + 0];
-			const auto i1 = mesh.indices[i + 1];
-			const auto i2 = mesh.indices[i + 2];
-
-			if (i0 >= mesh.vertices.size() || i1 >= mesh.vertices.size() || i2 >= mesh.vertices.size())
-				continue;
-
-			const auto& a = mesh.vertices[i0];
-			const auto& b = mesh.vertices[i1];
-			const auto& c = mesh.vertices[i2];
-
-			const auto ux = b.x - a.x;
-			const auto uy = b.y - a.y;
-			const auto uz = b.z - a.z;
-			const auto vx = c.x - a.x;
-			const auto vy = c.y - a.y;
-			const auto vz = c.z - a.z;
-
-			const auto nx = static_cast<float>(uy * vz - uz * vy);
-			const auto ny = static_cast<float>(uz * vx - ux * vz);
-			const auto nz = static_cast<float>(ux * vy - uy * vx);
-
-			for (const auto index : { i0, i1, i2 })
-			{
-				const auto base = static_cast<std::size_t>(index) * 3ULL;
-				normals[base + 0] += nx;
-				normals[base + 1] += ny;
-				normals[base + 2] += nz;
-			}
-		}
-
-		for (std::size_t i = 0; i + 2 < normals.size(); i += 3)
-		{
-			const auto x = normals[i + 0];
-			const auto y = normals[i + 1];
-			const auto z = normals[i + 2];
-			const auto length = std::sqrt(x * x + y * y + z * z);
-
-			if (length <= std::numeric_limits<float>::epsilon())
-			{
-				normals[i + 2] = 1.0f;
-				continue;
-			}
-
-			normals[i + 0] = x / length;
-			normals[i + 1] = y / length;
-			normals[i + 2] = z / length;
-		}
-
-		return normals;
-	}
-
 	struct Catalog
 	{
 		// 100 MB streaming buffers for typical CIFF sizes.
@@ -266,11 +203,6 @@ namespace f3d
 			}
 			if (!vbuf.empty())
 				w.write(vbuf.data(), vbuf.size());
-
-			// per-vertex smoothed normals
-			const auto normals = GenerateVertexNormals(mesh);
-			if (!normals.empty())
-				w.write(normals.data(), normals.size());
 
 			f3d::write(w, mesh.triangles());
 			f3d::write(w, mesh.indices);
