@@ -23,6 +23,8 @@
 
 namespace
 {
+    constexpr std::size_t kProgressCallbackNodeInterval = 4096;
+
     using Matrix3x4 = ciff::primitive_instance::Matrix3x4;
 
     struct SceneConvert final : ciff::Convert
@@ -60,7 +62,8 @@ namespace
 
             const auto total = data.nodes.size();
             const auto current = sd.nodes.size();
-            if (callback && !callback(total, current))
+            const bool progressCallbackDue = current % kProgressCallbackNodeInterval == 0 || current == total;
+            if (callback && progressCallbackDue && !callback(total, current))
                 cancelled = true;
         }
 
