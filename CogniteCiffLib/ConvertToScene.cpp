@@ -59,12 +59,6 @@ namespace
             n.instanceCount = 0;
             n.name          = node.name;
             sd.nodes.push_back(std::move(n));
-
-            const auto total = data.nodes.size();
-            const auto current = sd.nodes.size();
-            const bool progressCallbackDue = current % kProgressCallbackNodeInterval == 0 || current == total;
-            if (callback && progressCallbackDue && !callback(total, current))
-                cancelled = true;
         }
 
         void WriteGeometry(const ciff::Node&, const size_t geometryIndex) override
@@ -104,10 +98,6 @@ namespace
             CloseCurrentNode();
             EmitMaterials();
             primitiveStats.Print(source_file);
-
-            const auto total = data.nodes.size();
-            if (callback)
-                (void)callback(total, total);
         }
 
     private:
@@ -123,6 +113,12 @@ namespace
 
             for (auto k = current.firstInstance; k < end; ++k)
                 sd.instances[k].nodeIndex = idx;
+
+            const auto total = data.nodes.size();
+            const auto completed = sd.nodes.size();
+            const bool progressCallbackDue = completed % kProgressCallbackNodeInterval == 0 || completed == total;
+            if (callback && progressCallbackDue && !callback(total, completed))
+                throw std::runtime_error("Loading was cancelled by the user.");
         }
 
         uint32_t AddOrFindForm(const uint64_t shapeHash, const ciff::Mesh& mesh)
@@ -197,7 +193,6 @@ namespace
         const cifflib::ConvertProgressCallback&        callback;
         std::unordered_map<uint64_t, uint32_t>         formIndexByHash;
         ciff::primitive_stats::Stats                   primitiveStats;
-        bool                                           cancelled = false;
     };
 }
 
