@@ -24,6 +24,7 @@
 namespace
 {
     constexpr std::size_t kProgressCallbackNodeInterval = 4096;
+    constexpr std::size_t kProgressCallbackGeometryInterval = 256;
 
     using Matrix3x4 = ciff::primitive_instance::Matrix3x4;
 
@@ -63,6 +64,13 @@ namespace
 
         void WriteGeometry(const ciff::Node&, const size_t geometryIndex) override
         {
+            ++processedGeometryCount;
+            if (callback && processedGeometryCount % kProgressCallbackGeometryInterval == 0 &&
+                !callback(data.nodes.size(), sd.nodes.size()))
+            {
+                throw std::runtime_error("Loading was cancelled by the user.");
+            }
+
             const auto& geom = data.geometries[geometryIndex];
             const auto material = static_cast<uint32_t>(geom.color);
             auto form = ciff::primitive_instance::Make(data, geom);
@@ -193,6 +201,7 @@ namespace
         const cifflib::ConvertProgressCallback&        callback;
         std::unordered_map<uint64_t, uint32_t>         formIndexByHash;
         ciff::primitive_stats::Stats                   primitiveStats;
+        std::size_t                                    processedGeometryCount = 0;
     };
 }
 
