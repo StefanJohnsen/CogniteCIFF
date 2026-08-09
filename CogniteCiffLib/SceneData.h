@@ -35,6 +35,7 @@ namespace scene
     struct Mesh
     {
         std::vector<float>         positions;   // 3 * pointCount (x,y,z,...)
+        std::vector<float>         normals;     // empty or 3 * pointCount (nx,ny,nz,...)
         std::vector<std::uint32_t> indices;     // 3 * triangleCount
     };
 

@@ -4,7 +4,7 @@
   FalconCoding 3D v1 binary container exporter for CIFF.
 
     [Header]      magic, version, axes, counts, section offsets
-    [Forms]       deduplicated geometry in local space (one mesh per unique shape)
+    [Forms]       shapeHash + pointCount + positions + normalCount (0) + triangleCount + indices
     [Instances]   form reference + material + localToWorld (column-major 3x4)
     [Nodes]       scene tree: parent (int32, -1 for root) + firstInstance + instanceCount + name
     [Materials]   palette (RGBA8)
@@ -204,6 +204,8 @@ namespace f3d
 			if (!vbuf.empty())
 				w.write(vbuf.data(), vbuf.size());
 
+			constexpr uint32_t normalCount = 0;
+			f3d::write(w, normalCount);
 			f3d::write(w, mesh.triangles());
 			f3d::write(w, mesh.indices);
 		}
