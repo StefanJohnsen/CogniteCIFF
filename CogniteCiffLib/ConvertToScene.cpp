@@ -16,7 +16,7 @@
 
 #include "CmdBar.h"
 #include "Convert.h"
-#include "NormalsCIFF.h"
+#include "MeshNormals.h"
 #include "PrimitiveInstanceCIFF.h"
 #include "PrimitiveStatsCIFF.h"
 #include "PrimitivesCIFF.h"
@@ -91,7 +91,7 @@ namespace
             if (localMesh.empty())
                 return;
 
-            auto finalMesh = ciff::normal_processing::FinalizeMesh(localMesh);
+            auto finalMesh = ciff::normal_processing::FinalizeMeshNormals(localMesh);
             if (finalMesh.empty())
                 return;
 

@@ -16,7 +16,7 @@
 #include <string>
 
 #include "Convert.h"
-#include "NormalsCIFF.h"
+#include "MeshNormals.h"
 #include "ProcessCIFF.h"
 #include "Util.h"
 #include "WriteBuffer.h"
@@ -126,7 +126,7 @@ namespace obj
 		void WriteGeometry(const ciff::Node&, const size_t geometryIndex) override
 		{
 			const auto sourceMesh = ciff::TessellateGeometry(data, geometryIndex);
-			const auto mesh = ciff::normal_processing::FinalizeMesh(sourceMesh);
+			const auto mesh = ciff::normal_processing::FinalizeMeshNormals(sourceMesh);
 
 			if (mesh.empty())
 				return;

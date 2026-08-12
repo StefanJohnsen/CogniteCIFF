@@ -274,12 +274,12 @@ namespace ciff::normal_processing
                 : EdgeUse{faceIndex, secondGlobalCorner, firstGlobalCorner};
             edges[edgeKey(firstPoint, secondPoint)].add(use);
         }
+
+        inline RenderGeometry BuildRenderGeometry(const RenderGeometry& source);
     }
 
-    inline RenderGeometry BuildRenderGeometry(const RenderGeometry& source)
+    inline RenderGeometry detail::BuildRenderGeometry(const RenderGeometry& source)
     {
-        using namespace detail;
-
         if (!source.normals.empty())
             throw std::runtime_error("Normal generation requires a source scene mesh without normals.");
         if (source.positions.size() % 3 != 0)
@@ -475,7 +475,7 @@ namespace ciff::normal_processing
         return result;
     }
 
-    inline RenderGeometry FinalizeMesh(const ciff::Mesh& mesh)
+    inline RenderGeometry FinalizeMeshNormals(const ciff::Mesh& mesh)
     {
         if (mesh.vertices.size() > std::numeric_limits<uint32_t>::max())
             throw std::runtime_error("Source scene mesh point count exceeds the 32-bit range.");
@@ -489,6 +489,6 @@ namespace ciff::normal_processing
             source.positions.push_back(static_cast<float>(point.z));
         }
         source.indices = mesh.indices;
-        return BuildRenderGeometry(source);
+        return detail::BuildRenderGeometry(source);
     }
 }

@@ -36,7 +36,7 @@
 #include <vector>
 
 #include "Convert.h"
-#include "NormalsCIFF.h"
+#include "MeshNormals.h"
 #include "ProcessCIFF.h"
 #include "WriteBuffer.h"
 
@@ -472,7 +472,7 @@ namespace fbx
 			for (size_t gi = 0; gi < data.geometries.size(); ++gi)
 			{
 				const auto sourceMesh = ciff::TessellateGeometry(data, gi);
-				const auto mesh = ciff::normal_processing::FinalizeMesh(sourceMesh);
+				const auto mesh = ciff::normal_processing::FinalizeMeshNormals(sourceMesh);
 				if (mesh.empty()) continue;
 
 				const int64_t id = IdGen::Next();

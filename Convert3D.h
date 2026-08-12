@@ -36,7 +36,7 @@
 #include <array>
 
 #include "Convert.h"
-#include "NormalsCIFF.h"
+#include "MeshNormals.h"
 #include "PrimitiveInstanceCIFF.h"
 #include "PrimitiveStatsCIFF.h"
 #include "TempFile.h"
@@ -431,7 +431,7 @@ namespace f3d
 		if (localMesh.empty())
 			return;
 
-		auto finalMesh = ciff::normal_processing::FinalizeMesh(localMesh);
+		auto finalMesh = ciff::normal_processing::FinalizeMeshNormals(localMesh);
 		if (finalMesh.empty())
 			return;
 

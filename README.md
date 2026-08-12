@@ -56,8 +56,8 @@ are copied verbatim from `AutodeskFBX`.
 - The CIFF reader follows the format produced by `ConvertCIFF.h` in the
   `AutodeskFBX` repository (magic `0x46443343`, version 4, record types
   `1`, `3`, `19`, `23`, footer `0`).
-- CIFF has no vertex-normal stream. `NormalsCIFF.h` finalizes triangle meshes
-  before exporting to formats that support normals. It uses the common
+- CIFF has no vertex-normal stream. `MeshNormals.h` exposes `FinalizeMeshNormals`
+  to finalize triangle meshes before exporting to formats that support normals. It uses the common
   final-mesh policy: `1e-6` position welding, a 60-degree crease threshold,
   smoothing only across two-use manifold edges, corner-angle weighting and
   deterministic vertex splitting. Degenerate faces are omitted.

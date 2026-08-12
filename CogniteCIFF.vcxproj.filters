@@ -64,7 +64,7 @@
     <ClInclude Include="FileType.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="NormalsCIFF.h">
+    <ClInclude Include="MeshNormals.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="PrimitiveInstanceCIFF.h">

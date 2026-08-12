@@ -85,7 +85,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ConvertToScene.h" />
-    <ClInclude Include="..\NormalsCIFF.h" />
+    <ClInclude Include="..\MeshNormals.h" />
     <ClInclude Include="..\PrimitiveInstanceCIFF.h" />
     <ClInclude Include="..\PrimitiveStatsCIFF.h" />
     <ClInclude Include="SceneData.h" />

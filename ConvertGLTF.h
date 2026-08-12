@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "Convert.h"
-#include "NormalsCIFF.h"
+#include "MeshNormals.h"
 #include "ProcessCIFF.h"
 #include "TempFile.h"
 #include "Util.h"
@@ -629,7 +629,7 @@ namespace gltf
 		void WriteGeometry(const ciff::Node& node, const size_t geometryIndex) override
 		{
 			const auto sourceMesh = ciff::TessellateGeometry(data, geometryIndex);
-			const auto mesh = ciff::normal_processing::FinalizeMesh(sourceMesh);
+			const auto mesh = ciff::normal_processing::FinalizeMeshNormals(sourceMesh);
 			if (mesh.empty())
 				return;
 
