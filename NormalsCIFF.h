@@ -1,9 +1,8 @@
 #pragma once
 
-// CIFF does not carry vertex normals. This is the repository-local copy of
-// 3DViewer's scene_processing::BuildRenderGeometry fallback. Keep the
-// constants and grouping rules in sync until geometry processing is moved to
-// a shared module.
+// CIFF does not carry vertex normals. This is the repository-local
+// implementation of the common final-mesh normal policy. Keep the constants
+// and grouping rules in sync until geometry processing is moved to a shared module.
 
 #include "PrimitivesCIFF.h"
 
@@ -36,11 +35,6 @@ namespace ciff::normal_processing
         [[nodiscard]] uint32_t triangles() const noexcept
         {
             return static_cast<uint32_t>(indices.size() / 3);
-        }
-
-        [[nodiscard]] bool hasNormals() const noexcept
-        {
-            return !normals.empty() && normals.size() == positions.size();
         }
 
         std::vector<float> positions;

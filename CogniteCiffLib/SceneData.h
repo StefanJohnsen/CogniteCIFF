@@ -2,21 +2,22 @@
 
 // SceneData.h
 //
-// Shared scene contract between every Convert*-pipeline (FBX/RVM/CIFF/.3d)
+// Shared scene contract between every Convert*-pipeline (FBX/RVM/CIFF/OBJ/NWD/.3d)
 // and the 3DViewer. Header-only. No DirectX, no Windows, no I/O. Pure data.
 //
 // Designed so that vertex/index arrays can be read directly from disk
 // (one ReadExact per array) and uploaded directly to GPU buffers (memcpy).
 //
-// NOTE: This file is intentionally duplicated across:
+// NOTE: This contract is intentionally duplicated across:
 //         3DViewer/Scene/SceneData.h
 //         CADViewer/Scene/SceneData.h
 //         AutodeskFBX/AutodeskFBXLib/SceneData.h
 //         AvevaRvmDebug/AvevaRvmLib/SceneData.h
 //         CogniteCIFF/CogniteCiffLib/SceneData.h
 //         Falcon3D/Falcon3DLib/SceneData.h
-//       All copies MUST stay byte-identical. When the contract stabilises
-//       it should be promoted to a single shared module.
+//         FalconOBJ/FalconOBJLib/SceneData.h
+//         NavisworksNWD/NavisworksNWDLib/SceneData.h
+//       These copies define the v1 contract and MUST keep identical field order and semantics.
 
 #include <cstdint>
 #include <string>
@@ -35,7 +36,7 @@ namespace scene
     struct Mesh
     {
         std::vector<float>         positions;   // 3 * pointCount (x,y,z,...)
-        std::vector<float>         normals;     // empty or 3 * pointCount (nx,ny,nz,...)
+        std::vector<float>         normals;     // 3 * pointCount; one finite unit normal per point (empty iff pointCount == 0)
         std::vector<std::uint32_t> indices;     // 3 * triangleCount
     };
 

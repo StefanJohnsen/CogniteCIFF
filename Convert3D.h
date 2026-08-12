@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -177,7 +178,7 @@ namespace f3d
 	struct Header
 	{
 		static constexpr uint32_t NativeMagicBytes = 0x46443343;
-		static constexpr uint32_t NativeSDKVersion = 1;
+		static constexpr uint32_t BinaryVersion = 1;
 		static constexpr uint8_t  UpAxis           = 2; // Z-up
 		static constexpr uint8_t  FrontAxis        = 4; // Y-forward
 
@@ -206,17 +207,32 @@ namespace f3d
 			AddHashBytes(hash, &value, sizeof(value));
 		}
 
+		static void ValidateFinalNormals(const ciff::normal_processing::RenderGeometry& mesh)
+		{
+			if (mesh.empty() || mesh.positions.size() % 3U != 0U || mesh.indices.size() % 3U != 0U)
+				throw std::runtime_error("Falcon3D form must contain triangle geometry");
+			if (mesh.normals.size() != mesh.positions.size())
+				throw std::runtime_error("Falcon3D form must contain one final normal per point");
+
+			for (size_t offset = 0; offset < mesh.normals.size(); offset += 3U)
+			{
+				const auto x = static_cast<double>(mesh.normals[offset + 0U]);
+				const auto y = static_cast<double>(mesh.normals[offset + 1U]);
+				const auto z = static_cast<double>(mesh.normals[offset + 2U]);
+				const auto lengthSquared = x * x + y * y + z * z;
+				if (!std::isfinite(lengthSquared) || std::abs(lengthSquared - 1.0) > 1.0e-3)
+					throw std::runtime_error("Falcon3D form contains an invalid final normal");
+			}
+		}
+
 		static uint64_t ContentHash(const ciff::normal_processing::RenderGeometry& mesh) noexcept
 		{
 			auto hash = FnvOffsetBasis;
 			const auto pointCount = mesh.points();
-			const auto normalCount = mesh.hasNormals() ? pointCount : 0U;
 			const auto triangleCount = mesh.triangles();
 			AddHashValue(hash, pointCount);
 			AddHashBytes(hash, mesh.positions.data(), mesh.positions.size() * sizeof(float));
-			AddHashValue(hash, normalCount);
-			if (normalCount != 0U)
-				AddHashBytes(hash, mesh.normals.data(), mesh.normals.size() * sizeof(float));
+			AddHashBytes(hash, mesh.normals.data(), mesh.normals.size() * sizeof(float));
 			AddHashValue(hash, triangleCount);
 			AddHashBytes(hash, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
 			return hash == 0 ? 1 : hash;
@@ -224,13 +240,13 @@ namespace f3d
 
 		static void Write(WriteBuffer& w, const ciff::normal_processing::RenderGeometry& mesh)
 		{
+			ValidateFinalNormals(mesh);
+
 			f3d::write(w, ContentHash(mesh));
-			f3d::write(w, mesh.points());
+			const auto pointCount = mesh.points();
+			f3d::write(w, pointCount);
 			f3d::write(w, mesh.positions);
-			const auto normalCount = mesh.hasNormals() ? mesh.points() : 0U;
-			f3d::write(w, normalCount);
-			if (normalCount != 0U)
-				f3d::write(w, mesh.normals);
+			f3d::write(w, mesh.normals);
 			f3d::write(w, mesh.triangles());
 			f3d::write(w, mesh.indices);
 		}
@@ -346,7 +362,7 @@ namespace f3d
 		auto& catalog = convert.catalog;
 
 		f3d::write(w, NativeMagicBytes);
-		f3d::write(w, NativeSDKVersion);
+		f3d::write(w, BinaryVersion);
 		f3d::write(w, UpAxis);
 		f3d::write(w, FrontAxis);
 
