@@ -16,6 +16,7 @@
 
 #include "CmdBar.h"
 #include "Convert.h"
+#include "NormalsCIFF.h"
 #include "PrimitiveInstanceCIFF.h"
 #include "PrimitiveStatsCIFF.h"
 #include "PrimitivesCIFF.h"
@@ -90,11 +91,15 @@ namespace
             if (localMesh.empty())
                 return;
 
+            auto finalMesh = ciff::normal_processing::FinalizeMesh(localMesh);
+            if (finalMesh.empty())
+                return;
+
             const auto shapeHash = form.hash;
             if (shapeHash == 0)
                 return;
 
-            const auto formIndex = AddOrFindForm(shapeHash, std::move(localMesh));
+            const auto formIndex = AddOrFindForm(shapeHash, std::move(finalMesh));
             primitiveStats.Record(geom, shapeHash);
             EmitInstance(formIndex, material, form.transform);
         }
@@ -129,40 +134,18 @@ namespace
                 throw std::runtime_error("Loading was cancelled by the user.");
         }
 
-        uint32_t AddOrFindForm(const uint64_t shapeHash, const ciff::Mesh& mesh)
+        uint32_t AddOrFindForm(
+            const uint64_t shapeHash,
+            ciff::normal_processing::RenderGeometry&& mesh)
         {
             if (const auto it = formIndexByHash.find(shapeHash); it != formIndexByHash.end())
                 return it->second;
 
-            auto sceneMesh = BuildSceneMesh(mesh);
-            sceneMesh.indices = mesh.indices;
-            return AddForm(shapeHash, std::move(sceneMesh));
-        }
-
-        uint32_t AddOrFindForm(const uint64_t shapeHash, ciff::Mesh&& mesh)
-        {
-            if (const auto it = formIndexByHash.find(shapeHash); it != formIndexByHash.end())
-                return it->second;
-
-            auto sceneMesh = BuildSceneMesh(mesh);
+            scene::Mesh sceneMesh;
+            sceneMesh.positions = std::move(mesh.positions);
+            sceneMesh.normals = std::move(mesh.normals);
             sceneMesh.indices = std::move(mesh.indices);
             return AddForm(shapeHash, std::move(sceneMesh));
-        }
-
-        static scene::Mesh BuildSceneMesh(const ciff::Mesh& mesh)
-        {
-            scene::Mesh sceneMesh;
-            sceneMesh.positions.resize(mesh.vertices.size() * 3ULL);
-            for (size_t i = 0; i < mesh.vertices.size(); ++i)
-            {
-                const auto& v = mesh.vertices[i];
-                const auto base = i * 3ULL;
-                sceneMesh.positions[base + 0] = static_cast<float>(v.x);
-                sceneMesh.positions[base + 1] = static_cast<float>(v.y);
-                sceneMesh.positions[base + 2] = static_cast<float>(v.z);
-            }
-
-            return sceneMesh;
         }
 
         uint32_t AddForm(const uint64_t shapeHash, scene::Mesh&& sceneMesh)

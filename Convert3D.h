@@ -4,7 +4,7 @@
   FalconCoding 3D v1 binary container exporter for CIFF.
 
     [Header]      magic, version, axes, counts, section offsets
-    [Forms]       shapeHash + pointCount + positions + normalCount (0) + triangleCount + indices
+    [Forms]       contentHash + pointCount + positions + normals + triangleCount + indices
     [Instances]   form reference + material + localToWorld (column-major 3x4)
     [Nodes]       scene tree: parent (int32, -1 for root) + firstInstance + instanceCount + name
     [Materials]   palette (RGBA8)
@@ -35,6 +35,7 @@
 #include <array>
 
 #include "Convert.h"
+#include "NormalsCIFF.h"
 #include "PrimitiveInstanceCIFF.h"
 #include "PrimitiveStatsCIFF.h"
 #include "TempFile.h"
@@ -186,39 +187,64 @@ namespace f3d
 
 	struct FormGeometry
 	{
-		static void Write(WriteBuffer& w, const uint64_t shapeHash, const ciff::Mesh& mesh)
+		static constexpr uint64_t FnvOffsetBasis = 14695981039346656037ULL;
+		static constexpr uint64_t FnvPrime = 1099511628211ULL;
+
+		static void AddHashBytes(uint64_t& hash, const void* data, const size_t byteCount) noexcept
 		{
-			f3d::write(w, shapeHash);
-			f3d::write(w, mesh.points());
-
-			// vertices as float32 (3 per point)
-			std::vector<float> vbuf(mesh.vertices.size() * 3ULL);
-			for (size_t i = 0; i < mesh.vertices.size(); ++i)
+			const auto* bytes = static_cast<const uint8_t*>(data);
+			for (size_t i = 0; i < byteCount; ++i)
 			{
-				const auto& p = mesh.vertices[i];
-				const auto base = i * 3ULL;
-				vbuf[base + 0] = static_cast<float>(p.x);
-				vbuf[base + 1] = static_cast<float>(p.y);
-				vbuf[base + 2] = static_cast<float>(p.z);
+				hash ^= bytes[i];
+				hash *= FnvPrime;
 			}
-			if (!vbuf.empty())
-				w.write(vbuf.data(), vbuf.size());
+		}
 
-			constexpr uint32_t normalCount = 0;
+		template <typename T>
+		static void AddHashValue(uint64_t& hash, const T& value) noexcept
+		{
+			AddHashBytes(hash, &value, sizeof(value));
+		}
+
+		static uint64_t ContentHash(const ciff::normal_processing::RenderGeometry& mesh) noexcept
+		{
+			auto hash = FnvOffsetBasis;
+			const auto pointCount = mesh.points();
+			const auto normalCount = mesh.hasNormals() ? pointCount : 0U;
+			const auto triangleCount = mesh.triangles();
+			AddHashValue(hash, pointCount);
+			AddHashBytes(hash, mesh.positions.data(), mesh.positions.size() * sizeof(float));
+			AddHashValue(hash, normalCount);
+			if (normalCount != 0U)
+				AddHashBytes(hash, mesh.normals.data(), mesh.normals.size() * sizeof(float));
+			AddHashValue(hash, triangleCount);
+			AddHashBytes(hash, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
+			return hash == 0 ? 1 : hash;
+		}
+
+		static void Write(WriteBuffer& w, const ciff::normal_processing::RenderGeometry& mesh)
+		{
+			f3d::write(w, ContentHash(mesh));
+			f3d::write(w, mesh.points());
+			f3d::write(w, mesh.positions);
+			const auto normalCount = mesh.hasNormals() ? mesh.points() : 0U;
 			f3d::write(w, normalCount);
+			if (normalCount != 0U)
+				f3d::write(w, mesh.normals);
 			f3d::write(w, mesh.triangles());
 			f3d::write(w, mesh.indices);
 		}
 
-		static uint32_t AddOrFind(Catalog& catalog, const uint64_t shapeHash, const ciff::Mesh& mesh)
+		static uint32_t AddOrFind(Catalog& catalog, const uint64_t formKey,
+		                          const ciff::normal_processing::RenderGeometry& mesh)
 		{
-			const auto it = catalog.formIndexByHash.find(shapeHash);
+			const auto it = catalog.formIndexByHash.find(formKey);
 			if (it != catalog.formIndexByHash.end())
 				return it->second;
 
 			const auto index = catalog.emittedFormCount++;
-			catalog.formIndexByHash.emplace(shapeHash, index);
-			Write(catalog.formStream, shapeHash, mesh);
+			catalog.formIndexByHash.emplace(formKey, index);
+			Write(catalog.formStream, mesh);
 			return index;
 		}
 	};
@@ -389,11 +415,15 @@ namespace f3d
 		if (localMesh.empty())
 			return;
 
+		auto finalMesh = ciff::normal_processing::FinalizeMesh(localMesh);
+		if (finalMesh.empty())
+			return;
+
 		const auto shapeHash = form.hash;
 		if (shapeHash == 0)
 			return;
 
-		const auto formIndex = FormGeometry::AddOrFind(catalog, shapeHash, localMesh);
+		const auto formIndex = FormGeometry::AddOrFind(catalog, shapeHash, finalMesh);
 
 		catalog.primitiveStats.Record(geom, shapeHash);
 		Instance::Emit(convert, formIndex, material, toF3D(form.transform));

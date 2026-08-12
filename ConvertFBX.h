@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "Convert.h"
+#include "NormalsCIFF.h"
 #include "ProcessCIFF.h"
 #include "WriteBuffer.h"
 
@@ -470,7 +471,8 @@ namespace fbx
 
 			for (size_t gi = 0; gi < data.geometries.size(); ++gi)
 			{
-				const auto mesh = ciff::TessellateGeometry(data, gi);
+				const auto sourceMesh = ciff::TessellateGeometry(data, gi);
+				const auto mesh = ciff::normal_processing::FinalizeMesh(sourceMesh);
 				if (mesh.empty()) continue;
 
 				const int64_t id = IdGen::Next();
@@ -486,13 +488,9 @@ namespace fbx
 
 				// Vertices: flat double array of x,y,z
 				vector<double> verts;
-				verts.reserve(mesh.vertices.size() * 3);
-				for (const auto& p : mesh.vertices)
-				{
-					verts.push_back(p.x);
-					verts.push_back(p.y);
-					verts.push_back(p.z);
-				}
+				verts.reserve(mesh.positions.size());
+				for (const auto value : mesh.positions)
+					verts.push_back(static_cast<double>(value));
 				Leaf::Write(w, "Vertices", [&](NodeScope& n) { P::AddArray(n, verts); });
 
 				// PolygonVertexIndex: int32 array, last index of each polygon is XOR'd with -1 (i.e. ~v).
@@ -508,6 +506,34 @@ namespace fbx
 					idx.push_back(~c); // end-of-polygon marker
 				}
 				Leaf::Write(w, "PolygonVertexIndex", [&](NodeScope& n) { P::AddArray(n, idx); });
+
+				// The finalized mesh has one normal per split vertex. Emit the
+				// corresponding value for every polygon corner.
+				{
+					auto le = NodeScope::Begin(w, "LayerElementNormal");
+					P::Add(le, int32_t(0));
+					le.EndProperties();
+					Leaf::Write(w, "Version", [](NodeScope& n) { P::Add(n, int32_t(101)); });
+					Leaf::Write(w, "Name", [](NodeScope& n) { P::Add(n, string("")); });
+					Leaf::Write(w, "MappingInformationType", [](NodeScope& n) {
+						P::Add(n, string("ByPolygonVertex"));
+					});
+					Leaf::Write(w, "ReferenceInformationType", [](NodeScope& n) {
+						P::Add(n, string("Direct"));
+					});
+
+					vector<double> normals;
+					normals.reserve(mesh.indices.size() * 3);
+					for (const auto index : mesh.indices)
+					{
+						const auto base = static_cast<size_t>(index) * 3;
+						normals.push_back(mesh.normals[base]);
+						normals.push_back(mesh.normals[base + 1]);
+						normals.push_back(mesh.normals[base + 2]);
+					}
+					Leaf::Write(w, "Normals", [&](NodeScope& n) { P::AddArray(n, normals); });
+					le.End(true);
+				}
 
 				// LayerElementMaterial (AllSame, mapping to material 0 of the model)
 				{
@@ -525,12 +551,19 @@ namespace fbx
 					le.End(true);
 				}
 
-				// Layer (binds material element)
+				// Layer (binds normal and material elements)
 				{
 					auto layer = NodeScope::Begin(w, "Layer");
 					P::Add(layer, int32_t(0));
 					layer.EndProperties();
 					Leaf::Write(w, "Version", [](NodeScope& n) { P::Add(n, int32_t(100)); });
+					{
+						auto le = NodeScope::Begin(w, "LayerElement");
+						le.EndProperties();
+						Leaf::Write(w, "Type", [](NodeScope& n) { P::Add(n, string("LayerElementNormal")); });
+						Leaf::Write(w, "TypedIndex", [](NodeScope& n) { P::Add(n, int32_t(0)); });
+						le.End(true);
+					}
 					{
 						auto le = NodeScope::Begin(w, "LayerElement");
 						le.EndProperties();

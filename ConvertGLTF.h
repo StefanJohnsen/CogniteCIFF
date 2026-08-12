@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "Convert.h"
+#include "NormalsCIFF.h"
 #include "ProcessCIFF.h"
 #include "TempFile.h"
 #include "Util.h"
@@ -351,7 +352,7 @@ namespace gltf
 			gltf::write(write, ",\n  \"bufferViews\": [\n");
 		}
 
-		static void WriteForMesh(const ciff::Mesh& mesh)
+		static void WriteForMesh(const ciff::normal_processing::RenderGeometry& mesh)
 		{
 			const auto vertexCount = static_cast<size_t>(mesh.points());
 			const auto triCount = static_cast<size_t>(mesh.triangles());
@@ -404,7 +405,8 @@ namespace gltf
 			gltf::write(write, ",\n  \"accessors\": [\n");
 		}
 
-		static void WriteForMesh(const ciff::Mesh& mesh, const VertexF& bbMin, const VertexF& bbMax)
+		static void WriteForMesh(const ciff::normal_processing::RenderGeometry& mesh,
+		                         const VertexF& bbMin, const VertexF& bbMax)
 		{
 			const auto vertexCount = static_cast<size_t>(mesh.points());
 			const auto indexCount = static_cast<size_t>(mesh.triangles()) * 3;
@@ -514,54 +516,6 @@ namespace gltf
 		}
 	};
 
-	// Compute per-vertex smoothed normals from CIFF mesh.
-	inline vector<VertexF> ComputeNormals(const ciff::Mesh& mesh)
-	{
-		const auto n = mesh.points();
-		vector<VertexF> normals(n, VertexF{ 0.0f, 0.0f, 0.0f });
-
-		for (uint32_t t = 0; t < mesh.triangles(); ++t)
-		{
-			const auto i0 = mesh.indices[3 * t + 0];
-			const auto i1 = mesh.indices[3 * t + 1];
-			const auto i2 = mesh.indices[3 * t + 2];
-
-			const auto& a = mesh.vertices[i0];
-			const auto& b = mesh.vertices[i1];
-			const auto& c = mesh.vertices[i2];
-
-			const float ux = static_cast<float>(b.x - a.x);
-			const float uy = static_cast<float>(b.y - a.y);
-			const float uz = static_cast<float>(b.z - a.z);
-			const float vx = static_cast<float>(c.x - a.x);
-			const float vy = static_cast<float>(c.y - a.y);
-			const float vz = static_cast<float>(c.z - a.z);
-
-			const float nx = uy * vz - uz * vy;
-			const float ny = uz * vx - ux * vz;
-			const float nz = ux * vy - uy * vx;
-
-			normals[i0].x += nx; normals[i0].y += ny; normals[i0].z += nz;
-			normals[i1].x += nx; normals[i1].y += ny; normals[i1].z += nz;
-			normals[i2].x += nx; normals[i2].y += ny; normals[i2].z += nz;
-		}
-
-		for (auto& v : normals)
-		{
-			const float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-			if (len > 1e-12f)
-			{
-				v.x /= len; v.y /= len; v.z /= len;
-			}
-			else
-			{
-				v.x = 0.0f; v.y = 0.0f; v.z = 1.0f;
-			}
-		}
-
-		return normals;
-	}
-
 	struct BinWriter
 	{
 		inline static WriteBuffer bin;
@@ -573,7 +527,8 @@ namespace gltf
 			bin.set(TempFiles::BinData());
 		}
 
-		static void Append(const ciff::Mesh& mesh, VertexF& outMin, VertexF& outMax)
+		static void Append(const ciff::normal_processing::RenderGeometry& mesh,
+		                   VertexF& outMin, VertexF& outMax)
 		{
 			// indices uint32
 			bin.write(mesh.indices.data(), mesh.indices.size());
@@ -584,11 +539,12 @@ namespace gltf
 			outMax = VertexF{ -1e38f, -1e38f, -1e38f };
 
 			vector<float> positions;
-			positions.reserve(mesh.vertices.size() * 3);
+			positions.reserve(mesh.positions.size());
 
-			for (const auto& v : mesh.vertices)
+			for (size_t i = 0; i < mesh.positions.size(); i += 3)
 			{
-				const auto p = zupToYup(v);
+				const auto p = zupToYup(ciff::Point{
+					mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2] });
 				positions.push_back(p.x);
 				positions.push_back(p.y);
 				positions.push_back(p.z);
@@ -605,12 +561,11 @@ namespace gltf
 			totalBytes += positions.size() * sizeof(float);
 
 			// normals float32 (Z-up -> Y-up)
-			const auto normals = ComputeNormals(mesh);
 			vector<float> nbuf;
-			nbuf.reserve(normals.size() * 3);
-			for (const auto& n : normals)
+			nbuf.reserve(mesh.normals.size());
+			for (size_t i = 0; i < mesh.normals.size(); i += 3)
 			{
-				const auto p = zupToYupNormal(n.x, n.y, n.z);
+				const auto p = zupToYupNormal(mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]);
 				nbuf.push_back(p.x);
 				nbuf.push_back(p.y);
 				nbuf.push_back(p.z);
@@ -673,7 +628,8 @@ namespace gltf
 
 		void WriteGeometry(const ciff::Node& node, const size_t geometryIndex) override
 		{
-			const auto mesh = ciff::TessellateGeometry(data, geometryIndex);
+			const auto sourceMesh = ciff::TessellateGeometry(data, geometryIndex);
+			const auto mesh = ciff::normal_processing::FinalizeMesh(sourceMesh);
 			if (mesh.empty())
 				return;
 

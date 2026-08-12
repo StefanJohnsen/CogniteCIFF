@@ -16,6 +16,7 @@
 #include <string>
 
 #include "Convert.h"
+#include "NormalsCIFF.h"
 #include "ProcessCIFF.h"
 #include "Util.h"
 #include "WriteBuffer.h"
@@ -124,19 +125,25 @@ namespace obj
 
 		void WriteGeometry(const ciff::Node&, const size_t geometryIndex) override
 		{
-			const auto mesh = ciff::TessellateGeometry(data, geometryIndex);
+			const auto sourceMesh = ciff::TessellateGeometry(data, geometryIndex);
+			const auto mesh = ciff::normal_processing::FinalizeMesh(sourceMesh);
 
 			if (mesh.empty())
 				return;
 
-			if (mesh.color != currentMaterial)
+			if (sourceMesh.color != currentMaterial)
 			{
-				obj::write(write, "usemtl " + materialName(mesh.color) + "\n");
-				currentMaterial = mesh.color;
+				obj::write(write, "usemtl " + materialName(sourceMesh.color) + "\n");
+				currentMaterial = sourceMesh.color;
 			}
 
-			for (const auto& point : mesh.vertices)
-				obj::write(write, "v %.6f %.6f %.6f\n", point.x, point.y, point.z);
+			for (size_t i = 0; i < mesh.positions.size(); i += 3)
+				obj::write(write, "v %.9g %.9g %.9g\n",
+				           mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]);
+
+			for (size_t i = 0; i < mesh.normals.size(); i += 3)
+				obj::write(write, "vn %.9g %.9g %.9g\n",
+				           mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]);
 
 			const auto base = static_cast<int64_t>(vertexBase);
 
@@ -145,7 +152,8 @@ namespace obj
 				const auto v1 = static_cast<int64_t>(mesh.indices[3 * t + 0]) + base + 1;
 				const auto v2 = static_cast<int64_t>(mesh.indices[3 * t + 1]) + base + 1;
 				const auto v3 = static_cast<int64_t>(mesh.indices[3 * t + 2]) + base + 1;
-				obj::write(write, "f %lld %lld %lld\n", v1, v2, v3);
+				obj::write(write, "f %lld//%lld %lld//%lld %lld//%lld\n",
+				           v1, v1, v2, v2, v3, v3);
 			}
 
 			vertexBase += mesh.points();

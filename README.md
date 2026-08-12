@@ -6,11 +6,11 @@ emits one of:
 | Target | Extension | Status |
 |--------|-----------|--------|
 | Cognite CIFF (clone) | `.ciff` | Full re-emit using the same writer as `AutodeskFBX` |
-| Autodesk FBX        | `.fbx`  | Scaffold (ASCII placeholder) |
-| AVEVA RVM           | `.rvm`  | Scaffold (text placeholder) |
-| FalconCoding 3D    | `.3d`  | Scaffold |
-| Khronos glTF        | `.gltf` | Scaffold (minimal JSON) |
-| Wavefront OBJ       | `.obj`  | Working (vertices + faces) |
+| Autodesk FBX        | `.fbx`  | Working (mesh normals and materials) |
+| AVEVA RVM           | `.rvm`  | Working (flat facet normals) |
+| FalconCoding 3D    | `.3d`  | Working (instanced meshes with normals) |
+| Khronos glTF        | `.gltf` | Working (positions, normals and materials) |
+| Wavefront OBJ       | `.obj`  | Working (positions, normals and faces) |
 | Hierarchy text      | `.txt`  | Working |
 | Hierarchy JSON      | `.json` | Working |
 | Raw geometry data   | `.dat`  | Working |
@@ -56,7 +56,15 @@ are copied verbatim from `AutodeskFBX`.
 - The CIFF reader follows the format produced by `ConvertCIFF.h` in the
   `AutodeskFBX` repository (magic `0x46443343`, version 4, record types
   `1`, `3`, `19`, `23`, footer `0`).
-- The FBX, RVM, glTF and 3D writers are scaffolds. They produce valid
-  but minimal output so the full pipeline compiles and runs end-to-end.
-  Replace them with the full implementations from `AutodeskFBX` /
-  `AvevaRvmDebug` when needed.
+- CIFF has no vertex-normal stream. `NormalsCIFF.h` finalizes triangle meshes
+  before exporting to formats that support normals. It mirrors 3DViewer's
+  fallback exactly: `1e-6` position welding, a 60-degree crease threshold,
+  smoothing only across two-use manifold edges, corner-angle weighting and
+  deterministic vertex splitting. Degenerate faces are omitted.
+- SceneData, FalconCoding 3D, glTF, OBJ and FBX exports use that same finalized
+  position/normal/index stream. RVM remains a format-specific exception: each
+  facet polygon stores its flat face normal. The CIFF clone and raw DAT formats
+  remain unchanged because their current schemas do not contain normals.
+- FalconCoding 3D forms store normals and use an FNV-1a hash over the exact
+  serialized point count, positions, normal count, normals, triangle count and
+  indices.
