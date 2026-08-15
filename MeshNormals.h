@@ -16,6 +16,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace ciff::normal_processing
@@ -275,10 +276,10 @@ namespace ciff::normal_processing
             edges[edgeKey(firstPoint, secondPoint)].add(use);
         }
 
-        inline RenderGeometry BuildRenderGeometry(const RenderGeometry& source);
+        inline RenderGeometry BuildRenderGeometry(RenderGeometry&& source);
     }
 
-    inline RenderGeometry detail::BuildRenderGeometry(const RenderGeometry& source)
+    inline RenderGeometry detail::BuildRenderGeometry(RenderGeometry&& source)
     {
         if (!source.normals.empty())
             throw std::runtime_error("Normal generation requires a source scene mesh without normals.");
@@ -430,6 +431,8 @@ namespace ciff::normal_processing
         }
 
         RenderGeometry result;
+        result.indices = std::move(source.indices);
+        result.indices.clear();
         result.indices.reserve(cornerCount);
         const auto initialPointCapacity = std::min(sourcePointCount, cornerCount);
         result.positions.reserve(initialPointCapacity * 3);
@@ -475,20 +478,39 @@ namespace ciff::normal_processing
         return result;
     }
 
+    namespace detail
+    {
+        template <typename Indices>
+        inline RenderGeometry FinalizeMeshNormalsImpl(
+            const std::vector<ciff::Point>& vertices,
+            Indices&& indices)
+        {
+            RenderGeometry source;
+            source.positions.reserve(vertices.size() * 3);
+            for (const auto& point : vertices)
+            {
+                source.positions.push_back(static_cast<float>(point.x));
+                source.positions.push_back(static_cast<float>(point.y));
+                source.positions.push_back(static_cast<float>(point.z));
+            }
+            source.indices = std::forward<Indices>(indices);
+            return BuildRenderGeometry(std::move(source));
+        }
+    }
+
     inline RenderGeometry FinalizeMeshNormals(const ciff::Mesh& mesh)
     {
         if (mesh.vertices.size() > std::numeric_limits<uint32_t>::max())
             throw std::runtime_error("Source scene mesh point count exceeds the 32-bit range.");
 
-        RenderGeometry source;
-        source.positions.reserve(mesh.vertices.size() * 3);
-        for (const auto& point : mesh.vertices)
-        {
-            source.positions.push_back(static_cast<float>(point.x));
-            source.positions.push_back(static_cast<float>(point.y));
-            source.positions.push_back(static_cast<float>(point.z));
-        }
-        source.indices = mesh.indices;
-        return detail::BuildRenderGeometry(source);
+        return detail::FinalizeMeshNormalsImpl(mesh.vertices, mesh.indices);
+    }
+
+    inline RenderGeometry FinalizeMeshNormals(ciff::Mesh&& mesh)
+    {
+        if (mesh.vertices.size() > std::numeric_limits<uint32_t>::max())
+            throw std::runtime_error("Source scene mesh point count exceeds the 32-bit range.");
+
+        return detail::FinalizeMeshNormalsImpl(mesh.vertices, std::move(mesh.indices));
     }
 }

@@ -7,9 +7,10 @@
 #include <windows.h>
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -34,19 +35,197 @@ namespace
 {
     constexpr std::size_t kProgressCallbackNodeInterval = 4096;
     constexpr std::size_t kProgressCallbackGeometryInterval = 256;
-    // Small CIFF records benefit from four workers on typical desktop CPUs.
-    // Large records retain the former two-worker cap because normal sealing can
-    // temporarily hold several streams proportional to one source mesh.
-    constexpr std::size_t kMaxGeometrySealingWorkers = 4U;
-    constexpr std::size_t kLargeGeometrySealingWorkers = 2U;
-    constexpr std::size_t kLargeGeometrySourceByteThreshold = 8U * 1024U * 1024U;
-    constexpr std::size_t kGeometrySealingTaskBatchSize = 16U;
+    // Scale sealing to the host while keeping one shared active-work budget.
+    // The estimate controls scheduling pressure; it is not an allocator-level
+    // RSS limit and does not include finalized geometry retained for commit.
+    constexpr std::size_t kMaxGeometrySealingWorkers = 16U;
+    constexpr std::size_t kMinGeometrySealingReservationBudgetBytes = 64U * 1024U * 1024U;
+    constexpr std::size_t kMaxGeometrySealingReservationBudgetBytes = 512U * 1024U * 1024U;
+    constexpr std::size_t kGeometrySealingEstimatedBytesPerElement = 512U;
+    constexpr std::size_t kBoxTessellatedElementUpperBound = 36U;
+    constexpr std::size_t kCylinderTessellatedElementUpperBound = 768U;
+    constexpr std::size_t kCircularTorusTessellatedElementUpperBound = 24948U;
+    constexpr std::size_t kSphereTessellatedElementUpperBound = 2160U;
+    constexpr std::size_t kSphericalDishTessellatedElementUpperBound = 1656U;
+    constexpr std::size_t kGeneralCylinderTessellatedElementUpperBound = 768U;
     constexpr std::uint64_t kFnvOffsetBasis = 14695981039346656037ULL;
     constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
     using Matrix3x4 = ciff::primitive_instance::Matrix3x4;
 
     using TimingClock = std::chrono::steady_clock;
+
+    [[nodiscard]] constexpr std::size_t SaturatingMultiply(
+        const std::size_t lhs,
+        const std::size_t rhs) noexcept
+    {
+        if (lhs != 0U && rhs > (std::numeric_limits<std::size_t>::max)() / lhs)
+            return (std::numeric_limits<std::size_t>::max)();
+        return lhs * rhs;
+    }
+
+    [[nodiscard]] constexpr std::size_t ParametricTessellatedElementUpperBound(
+        const ciff::Type primitive) noexcept
+    {
+        switch (primitive)
+        {
+            case ciff::Type::Box:
+                return kBoxTessellatedElementUpperBound;
+            case ciff::Type::Cylinder:
+                return kCylinderTessellatedElementUpperBound;
+            case ciff::Type::CircularTorus:
+                return kCircularTorusTessellatedElementUpperBound;
+            case ciff::Type::Sphere:
+                return kSphereTessellatedElementUpperBound;
+            case ciff::Type::SphericalDish:
+                return kSphericalDishTessellatedElementUpperBound;
+            case ciff::Type::GeneralCylinder:
+                return kGeneralCylinderTessellatedElementUpperBound;
+            default:
+                return (std::numeric_limits<std::size_t>::max)();
+        }
+    }
+
+    [[nodiscard]] std::size_t EstimateGeometrySealingReservation(
+        const ciff::Read& data,
+        const ciff::Geometry& geometry) noexcept
+    {
+        auto sourceElementCount = std::size_t{};
+        if (geometry.primitive == ciff::Type::Mesh)
+        {
+            if (geometry.mesh >= data.meshes.size())
+                return (std::numeric_limits<std::size_t>::max)();
+
+            const auto& mesh = data.meshes[geometry.mesh];
+            sourceElementCount = (std::max)(mesh.vertices.size(), mesh.indices.size());
+        }
+        else
+        {
+            sourceElementCount = ParametricTessellatedElementUpperBound(geometry.primitive);
+        }
+
+        return SaturatingMultiply(sourceElementCount, kGeometrySealingEstimatedBytesPerElement);
+    }
+
+    [[nodiscard]] std::size_t GeometrySealingReservationBudgetBytes() noexcept
+    {
+        MEMORYSTATUSEX memoryStatus{};
+        memoryStatus.dwLength = sizeof(memoryStatus);
+        if (::GlobalMemoryStatusEx(&memoryStatus) == FALSE)
+            return kMinGeometrySealingReservationBudgetBytes;
+
+        const auto toSize = [](const DWORDLONG bytes) noexcept
+        {
+            constexpr auto sizeMaximum = (std::numeric_limits<std::size_t>::max)();
+            if (bytes > static_cast<DWORDLONG>(sizeMaximum))
+                return sizeMaximum;
+            return static_cast<std::size_t>(bytes);
+        };
+
+        // Keep the active sealing allowance small relative to both the host and
+        // the memory still available after CIFF source data has been loaded.
+        // This remains a scheduling estimate rather than a hard RSS limit.
+        const auto totalMemoryShare = toSize(memoryStatus.ullTotalPhys / 32U);
+        const auto availableMemoryShare = toSize(memoryStatus.ullAvailPhys / 8U);
+        const auto adaptiveBudget = (std::min)(totalMemoryShare, availableMemoryShare);
+        return (std::clamp)(adaptiveBudget,
+                            kMinGeometrySealingReservationBudgetBytes,
+                            kMaxGeometrySealingReservationBudgetBytes);
+    }
+
+    [[nodiscard]] std::size_t ParseWindowsPhysicalCoreCount(
+        const std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>& topology,
+        const DWORD byteCount) noexcept
+    {
+        const auto capacityBytes = topology.size() * sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
+        if (byteCount == 0U || static_cast<std::size_t>(byteCount) > capacityBytes)
+            return 0U;
+
+        constexpr auto recordHeaderBytes = offsetof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, Processor);
+        const auto* bytes = reinterpret_cast<const std::byte*>(topology.data());
+        auto offset = std::size_t{};
+        auto coreCount = std::size_t{};
+        while (offset < byteCount)
+        {
+            const auto remaining = static_cast<std::size_t>(byteCount) - offset;
+            if (remaining < recordHeaderBytes)
+                return 0U;
+
+            const auto* record =
+                reinterpret_cast<const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(bytes + offset);
+            const auto recordBytes = static_cast<std::size_t>(record->Size);
+            if (recordBytes < recordHeaderBytes || recordBytes > remaining)
+                return 0U;
+
+            if (record->Relationship == RelationProcessorCore)
+                ++coreCount;
+            offset += recordBytes;
+        }
+
+        return offset == byteCount ? coreCount : 0U;
+    }
+
+    [[nodiscard]] std::size_t QueryWindowsPhysicalCoreCount() noexcept
+    {
+        try
+        {
+            DWORD requiredBytes = 0U;
+            if (::GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &requiredBytes) == FALSE &&
+                (::GetLastError() != ERROR_INSUFFICIENT_BUFFER || requiredBytes == 0U))
+            {
+                return 0U;
+            }
+            if (requiredBytes == 0U)
+                return 0U;
+
+            for (unsigned int attempt = 0U; attempt < 3U; ++attempt)
+            {
+                const auto recordSize = sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
+                const auto elementCount = static_cast<std::size_t>(requiredBytes) / recordSize +
+                                          (requiredBytes % recordSize != 0U ? 1U : 0U);
+                auto topology = std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(elementCount);
+
+                DWORD returnedBytes = requiredBytes;
+                if (::GetLogicalProcessorInformationEx(RelationProcessorCore, topology.data(), &returnedBytes) != FALSE)
+                    return ParseWindowsPhysicalCoreCount(topology, returnedBytes);
+
+                if (::GetLastError() != ERROR_INSUFFICIENT_BUFFER || returnedBytes <= requiredBytes)
+                    return 0U;
+                requiredBytes = returnedBytes;
+            }
+        }
+        catch (...)
+        {
+            // Topology-buffer failures use the conservative fallback.
+        }
+
+        return 0U;
+    }
+
+    [[nodiscard]] std::size_t FallbackPhysicalCoreCount() noexcept
+    {
+        const auto logicalCores = static_cast<std::size_t>(std::thread::hardware_concurrency());
+        if (logicalCores <= 1U)
+            return 1U;
+
+        // Conservatively assume two SMT threads per physical core when Windows
+        // topology information is unavailable.
+        const auto assumedPhysicalCores = logicalCores / 2U;
+        return assumedPhysicalCores == 0U ? 1U : assumedPhysicalCores;
+    }
+
+    [[nodiscard]] std::size_t GeometrySealingWorkerCount(const std::size_t taskCount) noexcept
+    {
+        if (taskCount == 0U)
+            return 0U;
+
+        auto physicalCores = QueryWindowsPhysicalCoreCount();
+        if (physicalCores == 0U)
+            physicalCores = FallbackPhysicalCoreCount();
+
+        const auto desiredWorkers = physicalCores > 1U ? physicalCores - 1U : 1U;
+        return (std::min)({ desiredWorkers, kMaxGeometrySealingWorkers, taskCount });
+    }
 
     [[nodiscard]] double MillisecondsSince(const TimingClock::time_point start) noexcept
     {
@@ -539,79 +718,126 @@ namespace
             return AddSealingTask(geometryIndex, form);
         }
 
-        [[nodiscard]] std::size_t GeometryWorkerLimit() const noexcept
+        [[nodiscard]] std::vector<std::size_t> GeometryTaskReservations(
+            const std::vector<std::uint32_t>& taskIndices) const
         {
-            for (const auto& task : sealingTasks)
+            auto reservations = std::vector<std::size_t>{};
+            reservations.reserve(taskIndices.size());
+            for (const auto taskIndex : taskIndices)
             {
+                if (taskIndex >= sealingTasks.size())
+                    throw std::runtime_error("CIFF geometry reservation refers to a missing sealing task");
+                const auto& task = sealingTasks[taskIndex];
                 if (task.geometryIndex >= data.geometries.size())
-                    return kLargeGeometrySealingWorkers;
-                const auto& geometry = data.geometries[task.geometryIndex];
-                if (geometry.primitive != ciff::Type::Mesh || geometry.mesh >= data.meshes.size())
-                    continue;
+                    throw std::runtime_error("CIFF geometry reservation refers to a missing geometry record");
 
-                const auto& mesh = data.meshes[geometry.mesh];
-                if (mesh.vertices.size() > kLargeGeometrySourceByteThreshold / sizeof(mesh.vertices[0]))
-                    return kLargeGeometrySealingWorkers;
-                const auto vertexBytes = mesh.vertices.size() * sizeof(mesh.vertices[0]);
-                if (mesh.indices.size() >
-                    (kLargeGeometrySourceByteThreshold - vertexBytes) / sizeof(mesh.indices[0]))
-                {
-                    return kLargeGeometrySealingWorkers;
-                }
+                reservations.push_back(
+                    EstimateGeometrySealingReservation(data, data.geometries[task.geometryIndex]));
             }
-            return kMaxGeometrySealingWorkers;
+
+            return reservations;
         }
 
         template <typename Work>
-        void RunGeometryWorkers(const std::size_t taskCount, Work work)
+        void RunGeometryWorkers(const std::vector<std::size_t>& taskReservations, Work work)
         {
+            const auto taskCount = taskReservations.size();
             if (taskCount == 0U)
                 return;
+            const auto reservationBudgetBytes = GeometrySealingReservationBudgetBytes();
 
-            auto cancellationRequested = std::atomic_bool{ false };
-            auto workerFailed = std::atomic_bool{ false };
-            auto nextTaskIndex = std::atomic<std::size_t>{ 0U };
-            auto finishedWorkerCount = std::atomic<std::size_t>{ 0U };
-            auto workerError = std::exception_ptr{};
-            auto workerErrorMutex = std::mutex{};
-
-            const auto hardwareWorkerCount = std::max<std::size_t>(
-                1U, static_cast<std::size_t>(std::thread::hardware_concurrency()));
-            const auto workerCount = std::min(
-                { GeometryWorkerLimit(), hardwareWorkerCount, taskCount });
-            const auto sealWorker = [&]()
+            struct SchedulerState final
             {
+                std::mutex mutex;
+                std::condition_variable changed;
+                std::exception_ptr workerError;
+                std::size_t nextTaskIndex = 0U;
+                std::size_t activeTaskCount = 0U;
+                std::size_t activeReservationBytes = 0U;
+                std::size_t finishedWorkerCount = 0U;
+                bool stopRequested = false;
+            } scheduler;
+
+            const auto canAssignNextTask = [&]() noexcept
+            {
+                if (scheduler.nextTaskIndex >= taskCount)
+                    return false;
+
+                const auto reservation = taskReservations[scheduler.nextTaskIndex];
+                if (scheduler.activeReservationBytes <= reservationBudgetBytes &&
+                    reservation <=
+                        reservationBudgetBytes - scheduler.activeReservationBytes)
+                {
+                    return true;
+                }
+
+                // A task estimated above the shared budget can still make
+                // progress, but only as the sole active sealing task.
+                return scheduler.activeTaskCount == 0U && scheduler.activeReservationBytes == 0U;
+            };
+
+            const auto workerCount = GeometrySealingWorkerCount(taskCount);
+            const auto sealWorker = [&]() noexcept
+            {
+                auto activeReservationBytes = std::size_t{};
+                auto ownsActiveReservation = false;
                 try
                 {
-                    while (!cancellationRequested.load(std::memory_order_relaxed))
+                    while (true)
                     {
-                        const auto taskBegin = nextTaskIndex.fetch_add(
-                            kGeometrySealingTaskBatchSize, std::memory_order_relaxed);
-                        if (taskBegin >= taskCount)
-                            break;
-
-                        const auto taskEnd = std::min(
-                            taskCount, taskBegin + kGeometrySealingTaskBatchSize);
-                        for (auto taskIndex = taskBegin; taskIndex < taskEnd; ++taskIndex)
+                        auto taskIndex = std::size_t{};
                         {
-                            if (cancellationRequested.load(std::memory_order_relaxed))
+                            auto lock = std::unique_lock{ scheduler.mutex };
+                            scheduler.changed.wait(lock, [&]() noexcept
+                            {
+                                return scheduler.stopRequested ||
+                                       scheduler.nextTaskIndex >= taskCount ||
+                                       canAssignNextTask();
+                            });
+
+                            if (scheduler.stopRequested || scheduler.nextTaskIndex >= taskCount)
                                 break;
-                            work(taskIndex);
+
+                            taskIndex = scheduler.nextTaskIndex++;
+                            activeReservationBytes = taskReservations[taskIndex];
+                            scheduler.activeReservationBytes += activeReservationBytes;
+                            ++scheduler.activeTaskCount;
+                            ownsActiveReservation = true;
                         }
+
+                        work(taskIndex);
+
+                        {
+                            const auto lock = std::lock_guard{ scheduler.mutex };
+                            scheduler.activeReservationBytes -= activeReservationBytes;
+                            --scheduler.activeTaskCount;
+                            ownsActiveReservation = false;
+                        }
+                        scheduler.changed.notify_all();
                     }
                 }
                 catch (...)
                 {
                     {
-                        const auto lock = std::lock_guard{ workerErrorMutex };
-                        if (!workerError)
-                            workerError = std::current_exception();
+                        const auto lock = std::lock_guard{ scheduler.mutex };
+                        if (ownsActiveReservation)
+                        {
+                            scheduler.activeReservationBytes -= activeReservationBytes;
+                            --scheduler.activeTaskCount;
+                            ownsActiveReservation = false;
+                        }
+                        if (!scheduler.workerError)
+                            scheduler.workerError = std::current_exception();
+                        scheduler.stopRequested = true;
                     }
-                    workerFailed.store(true, std::memory_order_relaxed);
-                    cancellationRequested.store(true, std::memory_order_relaxed);
+                    scheduler.changed.notify_all();
                 }
 
-                finishedWorkerCount.fetch_add(1U, std::memory_order_relaxed);
+                {
+                    const auto lock = std::lock_guard{ scheduler.mutex };
+                    ++scheduler.finishedWorkerCount;
+                }
+                scheduler.changed.notify_all();
             };
 
             auto workers = std::vector<std::thread>{};
@@ -625,6 +851,15 @@ namespace
                 }
             };
 
+            const auto requestStop = [&]() noexcept
+            {
+                {
+                    const auto lock = std::lock_guard{ scheduler.mutex };
+                    scheduler.stopRequested = true;
+                }
+                scheduler.changed.notify_all();
+            };
+
             try
             {
                 for (std::size_t workerIndex = 0; workerIndex < workerCount; ++workerIndex)
@@ -632,7 +867,7 @@ namespace
             }
             catch (...)
             {
-                cancellationRequested.store(true, std::memory_order_relaxed);
+                requestStop();
                 joinWorkers();
                 throw;
             }
@@ -640,27 +875,41 @@ namespace
             auto cancelledByUser = false;
             try
             {
-                while (callback &&
-                       finishedWorkerCount.load(std::memory_order_relaxed) < workerCount &&
-                       !workerFailed.load(std::memory_order_relaxed))
+                while (callback)
                 {
+                    {
+                        const auto lock = std::lock_guard{ scheduler.mutex };
+                        if (scheduler.finishedWorkerCount >= workerCount || scheduler.workerError)
+                            break;
+                    }
+
                     if (!callback(data.nodes.size(), 0U))
                     {
                         cancelledByUser = true;
-                        cancellationRequested.store(true, std::memory_order_relaxed);
+                        requestStop();
                         break;
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds{ 8 });
+
+                    auto lock = std::unique_lock{ scheduler.mutex };
+                    scheduler.changed.wait_for(lock, std::chrono::milliseconds{ 8 }, [&]() noexcept
+                    {
+                        return scheduler.finishedWorkerCount >= workerCount || scheduler.workerError;
+                    });
                 }
                 joinWorkers();
             }
             catch (...)
             {
-                cancellationRequested.store(true, std::memory_order_relaxed);
+                requestStop();
                 joinWorkers();
                 throw;
             }
 
+            auto workerError = std::exception_ptr{};
+            {
+                const auto lock = std::lock_guard{ scheduler.mutex };
+                workerError = scheduler.workerError;
+            }
             if (workerError)
                 std::rethrow_exception(workerError);
             if (cancelledByUser)
@@ -686,15 +935,18 @@ namespace
                     identityTaskIndices.push_back(static_cast<std::uint32_t>(taskIndex));
             }
 
-            RunGeometryWorkers(identityTaskIndices.size(), [&](const std::size_t identityIndex)
             {
-                auto& task = sealingTasks[identityTaskIndices[identityIndex]];
-                const auto& geometry = data.geometries[task.geometryIndex];
-                auto form = ciff::primitive_instance::Make(data, geometry);
-                [[maybe_unused]] auto identityMesh =
-                    ciff::primitive_instance::Tessellate(data, geometry, form);
-                task.form = std::move(form);
-            });
+                const auto identityTaskReservations = GeometryTaskReservations(identityTaskIndices);
+                RunGeometryWorkers(identityTaskReservations, [&](const std::size_t identityIndex)
+                {
+                    auto& task = sealingTasks[identityTaskIndices[identityIndex]];
+                    const auto& geometry = data.geometries[task.geometryIndex];
+                    auto form = ciff::primitive_instance::Make(data, geometry);
+                    [[maybe_unused]] auto identityMesh =
+                        ciff::primitive_instance::Tessellate(data, geometry, form);
+                    task.form = std::move(form);
+                });
+            }
 
             // Resolve canonical sharing on the coordinator in original
             // occurrence order. Besides keeping IDs deterministic, this captures
@@ -737,19 +989,24 @@ namespace
             // task slot. Re-tessellating only the unique representatives keeps
             // peak memory at source data + final unique output, while avoiding
             // expensive render-normal generation for duplicate occurrences.
-            RunGeometryWorkers(uniqueSealingTaskIndices.size(), [&](const std::size_t uniqueIndex)
             {
-                auto& task = sealingTasks[uniqueSealingTaskIndices[uniqueIndex]];
-                const auto expectedHash = task.form.hash;
-                const auto& geometry = data.geometries[task.geometryIndex];
-                auto form = ciff::primitive_instance::Make(data, geometry);
-                auto localMesh = ciff::primitive_instance::Tessellate(data, geometry, form);
-                if (form.hash != expectedHash)
-                    throw std::runtime_error("CIFF canonical geometry identity changed between sealing passes");
-                task.form = std::move(form);
-                if (!localMesh.empty())
-                    task.finalMesh = ciff::normal_processing::FinalizeMeshNormals(localMesh);
-            });
+                const auto uniqueTaskReservations = GeometryTaskReservations(uniqueSealingTaskIndices);
+                RunGeometryWorkers(uniqueTaskReservations, [&](const std::size_t uniqueIndex)
+                {
+                    auto& task = sealingTasks[uniqueSealingTaskIndices[uniqueIndex]];
+                    const auto expectedHash = task.form.hash;
+                    if (expectedHash == 0U)
+                        throw std::runtime_error("CIFF unique geometry task has no resolved identity");
+                    const auto& geometry = data.geometries[task.geometryIndex];
+                    auto form = task.form;
+                    auto localMesh = ciff::primitive_instance::TessellateResolved(data, geometry, form);
+                    if (form.hash != expectedHash)
+                        throw std::runtime_error("CIFF canonical geometry identity changed between sealing passes");
+                    task.form = std::move(form);
+                    if (!localMesh.empty())
+                        task.finalMesh = ciff::normal_processing::FinalizeMeshNormals(std::move(localMesh));
+                });
+            }
         }
 
         void ProjectOccurrences()
