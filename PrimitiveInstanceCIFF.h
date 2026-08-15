@@ -317,6 +317,21 @@ namespace ciff::primitive_instance
 		return static_cast<uint32_t>(it - points.begin());
 	}
 
+	struct IndexedQuantizedPoint
+	{
+		QuantizedPoint point;
+		uint32_t sourceIndex = 0;
+
+		bool operator<(const IndexedQuantizedPoint& other) const noexcept
+		{
+			if (point < other.point)
+				return true;
+			if (other.point < point)
+				return false;
+			return sourceIndex < other.sourceIndex;
+		}
+	};
+
 	inline std::array<uint32_t, 3> CanonicalTriangle(const uint32_t a, const uint32_t b, const uint32_t c) noexcept
 	{
 		const std::array<uint32_t, 3> t0{ a, b, c };
@@ -378,6 +393,82 @@ namespace ciff::primitive_instance
 			mesh.indices.emplace_back(triangle[1]);
 			mesh.indices.emplace_back(triangle[2]);
 		}
+	}
+
+	// Hash the same canonical transcript produced by CanonicalizeMesh + HashMesh,
+	// without materializing a second Mesh. Each referenced source vertex is
+	// quantized once and receives its canonical index while the points are sorted;
+	// triangle remapping is then O(1) per index.
+	inline uint64_t HashCanonicalMesh(const Mesh& mesh)
+	{
+		if (mesh.empty() || mesh.indices.size() % 3 != 0)
+			return HashMesh(mesh);
+
+		constexpr auto invalidIndex = std::numeric_limits<uint32_t>::max();
+		std::vector<uint32_t> sourceToCanonical(mesh.vertices.size(), invalidIndex);
+		std::vector<IndexedQuantizedPoint> points;
+		points.reserve(std::min(mesh.vertices.size(), mesh.indices.size()));
+
+		for (const auto sourceIndex : mesh.indices)
+		{
+			if (sourceIndex >= mesh.vertices.size())
+				return HashMesh(mesh);
+
+			if (sourceToCanonical[sourceIndex] != invalidIndex)
+				continue;
+
+			// Any non-sentinel value marks the source vertex as already collected;
+			// the final canonical index is assigned after sorting below.
+			sourceToCanonical[sourceIndex] = 0;
+			points.push_back({ QuantizePoint(mesh, sourceIndex), sourceIndex });
+		}
+
+		std::sort(points.begin(), points.end());
+
+		uint32_t pointCount = 0;
+		for (size_t i = 0; i < points.size(); ++i)
+		{
+			if (i == 0 || !(points[i].point == points[i - 1].point))
+				++pointCount;
+			sourceToCanonical[points[i].sourceIndex] = pointCount - 1;
+		}
+
+		std::vector<std::array<uint32_t, 3>> triangles;
+		triangles.reserve(mesh.indices.size() / 3);
+		for (size_t i = 0; i < mesh.indices.size(); i += 3)
+		{
+			triangles.emplace_back(CanonicalTriangle(
+				sourceToCanonical[mesh.indices[i + 0]],
+				sourceToCanonical[mesh.indices[i + 1]],
+				sourceToCanonical[mesh.indices[i + 2]]));
+		}
+		std::sort(triangles.begin(), triangles.end());
+
+		auto hash = Hash(Type::Mesh);
+		const auto indexCount = static_cast<uint32_t>(mesh.indices.size());
+		hash = ciff::shape::mix(pointCount, hash);
+		hash = ciff::shape::mix(indexCount, hash);
+
+		for (size_t i = 0; i < points.size(); ++i)
+		{
+			if (i != 0 && points[i].point == points[i - 1].point)
+				continue;
+
+			// Preserve HashMesh's exact quantize -> double -> quantize transcript,
+			// including its behavior for coordinates beyond exact double integers.
+			const auto& point = points[i].point;
+			hash = ciff::shape::mix(ciff::shape::quantize(
+				static_cast<double>(point.x) / ciff::shape::quantizeScale), hash);
+			hash = ciff::shape::mix(ciff::shape::quantize(
+				static_cast<double>(point.y) / ciff::shape::quantizeScale), hash);
+			hash = ciff::shape::mix(ciff::shape::quantize(
+				static_cast<double>(point.z) / ciff::shape::quantizeScale), hash);
+		}
+
+		for (const auto& triangle : triangles)
+			hash = ciff::shape::fnv1a(triangle.data(), sizeof(uint32_t) * triangle.size(), hash);
+
+		return hash;
 	}
 
 	inline FormInstance Default(const Read& data, const Geometry& geometry)
@@ -600,7 +691,11 @@ namespace ciff::primitive_instance
 		}
 	}
 
-	inline Mesh Tessellate(const Read& data, const Geometry& geometry, FormInstance& form)
+	inline Mesh TessellateImpl(
+		const Read& data,
+		const Geometry& geometry,
+		FormInstance& form,
+		const bool resolveCanonicalMeshHash)
 	{
 		auto mesh = geometry.primitive == Type::Mesh
 			? data.getMesh(geometry.mesh)
@@ -613,12 +708,24 @@ namespace ciff::primitive_instance
 		{
 			if (NormalizeBakedAxisAlignedMesh(mesh, form.transform))
 			{
-				auto canonical = CopyMesh(mesh);
-				CanonicalizeMesh(canonical);
-				form.hash = HashMesh(canonical);
+				if (resolveCanonicalMeshHash)
+					form.hash = HashCanonicalMesh(mesh);
 			}
 		}
 
 		return mesh;
+	}
+
+	inline Mesh Tessellate(const Read& data, const Geometry& geometry, FormInstance& form)
+	{
+		return TessellateImpl(data, geometry, form, true);
+	}
+
+	// Recreate render geometry for a FormInstance whose canonical mesh hash was
+	// resolved in an earlier pass. The mesh normalization and transform remain
+	// identical, while the already resolved hash is preserved without re-sorting.
+	inline Mesh TessellateResolved(const Read& data, const Geometry& geometry, FormInstance& resolvedForm)
+	{
+		return TessellateImpl(data, geometry, resolvedForm, false);
 	}
 }

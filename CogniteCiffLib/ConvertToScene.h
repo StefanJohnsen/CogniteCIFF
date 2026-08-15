@@ -19,10 +19,31 @@ namespace scene { struct SceneData; }
 
 namespace cifflib
 {
+    // CPU wall-clock timings for the eager CIFF -> SceneData producer. The
+    // three detailed SceneData stages are non-overlapping; projection and total
+    // are rollups. These values remain separate from Viewer-wide parse/upload.
+    struct ConvertToSceneTimings
+    {
+        // CIFF parsing and source-table loading.
+        double dataLoadMs = 0.0;
+        // Geometry tessellation followed by render-normal finalization.
+        double geometryFinalizeMs = 0.0;
+        // Mesh hash/bounds/range creation and descriptor-table commit.
+        double meshDescriptorMs = 0.0;
+        // Remaining SceneData work: material setup, source traversal,
+        // instance/hierarchy projection, validation, and final handoff.
+        double instanceHierarchyMaterialMs = 0.0;
+        // Complete post-load CIFF -> SceneData projection.
+        double sceneProjectionMs = 0.0;
+        // Complete ConvertToScene call, including dataLoadMs.
+        double totalMs = 0.0;
+    };
+
     struct ConvertToSceneResult
     {
         bool         success = false;
         std::wstring message;
+        ConvertToSceneTimings timings;
     };
 
     using ConvertProgressCallback = std::function<bool(std::size_t total, std::size_t current)>;
