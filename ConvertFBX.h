@@ -9,7 +9,6 @@
     FBXHeaderExtension
     GlobalSettings (Z-up coordinate system)
     Documents
-    References
     Definitions (Model, Geometry, Material counts)
     Objects:
       - Geometry per ciff::Mesh
@@ -57,6 +56,14 @@ namespace fbx
 			// nothing to do; ids are monotonically increasing across files
 		}
 	};
+
+	inline string encodedObjectName(string name, const char* suffix)
+	{
+		name.push_back('\0');
+		name.push_back('\x01');
+		name += suffix;
+		return name;
+	}
 
 	// ---- low-level binary FBX writers ----
 	struct Bin
@@ -247,13 +254,13 @@ namespace fbx
 		}
 
 		static void Vec3(WriteBuffer& w, const string& name, const string& type,
-		                 const string& subtype, double x, double y, double z)
+		                 const string& subtype, double x, double y, double z, const string& flags = "")
 		{
 			Leaf::Write(w, "P", [&](NodeScope& s) {
 				P::Add(s, name);
 				P::Add(s, type);
 				P::Add(s, subtype);
-				P::Add(s, string(""));
+				P::Add(s, flags);
 				P::Add(s, x);
 				P::Add(s, y);
 				P::Add(s, z);
@@ -288,31 +295,6 @@ namespace fbx
 			Bin::U8(w, 0x1A);
 			Bin::U8(w, 0x00);
 			Bin::U32(w, 7500); // FBX 2016/2017 binary
-		}
-
-		static void Footer(WriteBuffer& w)
-		{
-			// Standard "all zeros" 13-byte NULL terminator already follows the last node.
-			// FBX file footer (160 bytes) - magic block matches typical SDK output.
-			static const uint8_t footer[] = {
-				// 16-byte signature padding
-				0xFA, 0xBC, 0xAB, 0x09, 0xD0, 0xC8, 0xD4, 0x66, 0xB1, 0x76, 0xFB, 0x83, 0x1C, 0xF7, 0x26, 0x7E,
-			};
-			Bin::Bytes(w, footer, sizeof(footer));
-
-			// 4 zero bytes (alignment padding) + version int32 + ~120 zero bytes.
-			static const uint8_t zeros4[4] = {};
-			Bin::Bytes(w, zeros4, 4);
-			Bin::U32(w, 7500);
-			static const uint8_t pad[120] = {};
-			Bin::Bytes(w, pad, 120);
-
-			// Trailing 16-byte block (FBX SDK signature)
-			static const uint8_t trail[16] = {
-				0xF8, 0x5A, 0x8C, 0x6A, 0xDE, 0xF5, 0xD9, 0x7E,
-				0xEC, 0xE9, 0x0C, 0xE3, 0x75, 0x8F, 0x29, 0x0B,
-			};
-			Bin::Bytes(w, trail, 16);
 		}
 	};
 
@@ -402,23 +384,12 @@ namespace fbx
 
 			auto p70 = NodeScope::Begin(w, "Properties70");
 			p70.EndProperties();
-			P70::Int(w, "ActiveAnimStackName", 0); // dummy
-			p70.End(true);
+			p70.End(false);
 
 			Leaf::Write(w, "RootNode", [](NodeScope& n) { P::Add(n, int64_t(0)); });
 
 			d.End(true);
 			s.End(true);
-		}
-	};
-
-	struct References
-	{
-		static void Write(WriteBuffer& w)
-		{
-			auto s = NodeScope::Begin(w, "References");
-			s.EndProperties();
-			s.End(false);
 		}
 	};
 
@@ -430,7 +401,7 @@ namespace fbx
 			s.EndProperties();
 
 			Leaf::Write(w, "Version", [](NodeScope& n) { P::Add(n, int32_t(100)); });
-			Leaf::Write(w, "Count",   [&](NodeScope& n) { P::Add(n, int32_t(3)); });
+			Leaf::Write(w, "Count",   [&](NodeScope& n) { P::Add(n, int32_t(4)); });
 
 			auto emit = [&](const char* objType, int32_t count, const char* subType)
 			{
@@ -444,11 +415,15 @@ namespace fbx
 					auto pt = NodeScope::Begin(w, "PropertyTemplate");
 					P::Add(pt, string(subType));
 					pt.EndProperties();
-					pt.End(false);
+					auto p70 = NodeScope::Begin(w, "Properties70");
+					p70.EndProperties();
+					p70.End(false);
+					pt.End(true);
 				}
 				o.End(true);
 			};
 
+			emit("GlobalSettings", 1, nullptr);
 			emit("Model",    modelCount,    "FbxNode");
 			emit("Geometry", geometryCount, "FbxMesh");
 			emit("Material", materialCount, "FbxSurfacePhong");
@@ -480,7 +455,7 @@ namespace fbx
 
 				auto g = NodeScope::Begin(w, "Geometry");
 				P::Add(g, id);
-				P::Add(g, string("Geometry::") + std::to_string(gi));
+				P::Add(g, encodedObjectName("Geometry_" + std::to_string(gi), "Geometry"));
 				P::Add(g, string("Mesh"));
 				g.EndProperties();
 
@@ -590,19 +565,23 @@ namespace fbx
 
 				auto m = NodeScope::Begin(w, "Model");
 				P::Add(m, id);
-				P::Add(m, string("Model::") + node.name);
-				P::Add(m, string("Mesh"));
+				P::Add(m, encodedObjectName(node.name, "Model"));
+				P::Add(m, string(node.geometries.empty() ? "Null" : "Mesh"));
 				m.EndProperties();
 
 				Leaf::Write(w, "Version", [](NodeScope& n) { P::Add(n, int32_t(232)); });
 
 				auto p70 = NodeScope::Begin(w, "Properties70");
 				p70.EndProperties();
-				P70::Vec3(w, "Lcl Translation", "Lcl Translation", "", 0.0, 0.0, 0.0);
-				P70::Vec3(w, "Lcl Rotation",    "Lcl Rotation",    "", 0.0, 0.0, 0.0);
-				P70::Vec3(w, "Lcl Scaling",     "Lcl Scaling",     "", 1.0, 1.0, 1.0);
+				P70::Vec3(w, "Lcl Translation", "Lcl Translation", "", 0.0, 0.0, 0.0, "A");
+				P70::Vec3(w, "Lcl Rotation",    "Lcl Rotation",    "", 0.0, 0.0, 0.0, "A");
+				P70::Vec3(w, "Lcl Scaling",     "Lcl Scaling",     "", 1.0, 1.0, 1.0, "A");
+				P70::Int(w, "DefaultAttributeIndex", 0);
+				P70::Enum(w, "InheritType", 1);
 				p70.End(true);
 
+				Leaf::Write(w, "MultiLayer", [](NodeScope& n) { P::Add(n, int32_t(0)); });
+				Leaf::Write(w, "MultiTake", [](NodeScope& n) { P::Add(n, int32_t(0)); });
 				Leaf::Write(w, "Shading", [](NodeScope& n) { P::Add(n, true); });
 				Leaf::Write(w, "Culling", [](NodeScope& n) { P::Add(n, string("CullingOff")); });
 
@@ -627,7 +606,7 @@ namespace fbx
 
 				auto mat = NodeScope::Begin(w, "Material");
 				P::Add(mat, id);
-				P::Add(mat, string("Material::material_") + std::to_string(mi));
+				P::Add(mat, encodedObjectName("material_" + std::to_string(mi), "Material"));
 				P::Add(mat, string(""));
 				mat.EndProperties();
 
@@ -742,7 +721,6 @@ namespace fbx
 			HeaderExtension::Write(write);
 			GlobalSettings::Write(write);
 			Documents::Write(write, docId);
-			References::Write(write);
 
 			Definitions::Write(write,
 				static_cast<int32_t>(data.nodes.size()),
@@ -783,10 +761,9 @@ namespace fbx
 			Connections::Write(write, data, objects, docId);
 			Takes::Write(write);
 
-			// Final NULL record + binary footer
-			static const uint8_t nullRecord[13] = {};
-			Bin::Bytes(write, nullRecord, 13);
-			Header::Footer(write);
+			// FBX 7.5 uses 64-bit node headers, so the top-level NULL record is 25 bytes.
+			static const uint8_t nullRecord[25] = {};
+			Bin::Bytes(write, nullRecord, sizeof(nullRecord));
 		}
 
 	private:
