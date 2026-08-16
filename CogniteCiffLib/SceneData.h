@@ -1,9 +1,8 @@
 #pragma once
 
-// SceneData.h
-//
-// Shared v1 scene contract. Keep the field layout, order and semantics identical
-// to the active pilot copies in 3DViewer and NavisworksNWDLib.
+// Shared SceneData v1 contract used by 3DViewer and all converter libraries.
+// Keep field layout, order, types, defaults and semantics identical in every copy.
+// Header-only data contract with no DirectX, Windows or I/O dependencies.
 
 #include <cstdint>
 #include <string>

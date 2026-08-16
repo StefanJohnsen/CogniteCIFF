@@ -223,6 +223,8 @@ namespace
         if (physicalCores == 0U)
             physicalCores = FallbackPhysicalCoreCount();
 
+        // Retain one physical core for cancellation polling and the surrounding
+        // serial SceneData projection stages.
         const auto desiredWorkers = physicalCores > 1U ? physicalCores - 1U : 1U;
         return (std::min)({ desiredWorkers, kMaxGeometrySealingWorkers, taskCount });
     }
