@@ -178,7 +178,7 @@
     <ClInclude Include="TempFile.h" />
     <ClInclude Include="Util.h" />
     <ClInclude Include="WriteBuffer.h" />
-    <ClInclude Include="WriteInflateFBX.h" />
+    <ClInclude Include="Zlib.h" />
     <ClInclude Include="WriteStatistics.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

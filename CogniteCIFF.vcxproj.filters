@@ -106,7 +106,7 @@
     <ClInclude Include="WriteBuffer.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="WriteInflateFBX.h">
+    <ClInclude Include="Zlib.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="WriteStatistics.h">
