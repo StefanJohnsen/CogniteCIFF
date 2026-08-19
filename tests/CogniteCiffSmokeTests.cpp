@@ -248,6 +248,7 @@ namespace
             AddFingerprintValue(hash, node.parent);
             AddFingerprintValue(hash, node.firstInstance);
             AddFingerprintValue(hash, node.instanceCount);
+            AddFingerprintValue(hash, node.nodeFlags);
             const auto nameBytes = static_cast<std::uint64_t>(node.name.size());
             AddFingerprintValue(hash, nameBytes);
             AddHashBytes(hash, node.name.data(), node.name.size());
@@ -354,6 +355,10 @@ namespace
         const auto& node = result.nodes.front();
         Check(node.parent == -1 && node.firstInstance == 0U && node.instanceCount == 1U,
               "Root instance range is incorrect");
+        Check(scene::HasValidNodeFlags(node.nodeFlags) &&
+                  scene::GetNodeType(node.nodeFlags) == scene::NodeType::Node &&
+                  !scene::IsSourceHidden(node.nodeFlags),
+              "Root node flags are incorrect");
         Check(node.name == "Root", "Root name was not preserved");
     }
 
@@ -389,7 +394,8 @@ namespace
         sentinel.mirrorXAxisInWorld = false;
         sentinel.geometryChunksGpuReady = true;
         sentinel.rootNode = 73U;
-        sentinel.nodes.push_back(scene::Node{-1, 9U, 11U, "unchanged"});
+        sentinel.nodes.push_back(
+            scene::Node{-1, 9U, 11U, scene::MakeNodeFlags(scene::NodeType::Node, true), "unchanged"});
         sentinel.materials.push_back(scene::Material{1U, 2U, 3U, 4U, 5U});
         sentinel.meshes.emplace_back();
         sentinel.meshes.back().shapeHash = 0x123456789abcdef0ULL;
@@ -418,7 +424,9 @@ namespace
         Check(!sentinel.mirrorXAxisInWorld && sentinel.geometryChunksGpuReady && sentinel.rootNode == 73U,
               "Cancelled conversion changed top-level sentinel state");
         Check(sentinel.nodes.size() == 1U && sentinel.nodes.front().name == "unchanged" &&
-                  sentinel.nodes.front().firstInstance == 9U && sentinel.nodes.front().instanceCount == 11U,
+                  sentinel.nodes.front().firstInstance == 9U && sentinel.nodes.front().instanceCount == 11U &&
+                  scene::GetNodeType(sentinel.nodes.front().nodeFlags) == scene::NodeType::Node &&
+                  scene::IsSourceHidden(sentinel.nodes.front().nodeFlags),
               "Cancelled conversion changed the sentinel hierarchy");
         Check(sentinel.materials.size() == 1U && sentinel.materials.front().textureIndex == 5U,
               "Cancelled conversion changed the sentinel material table");
@@ -634,7 +642,11 @@ namespace
         Check(file.read<std::int32_t>(node + 0U) == -1 && file.read<std::uint32_t>(node + 4U) == 0U &&
                   file.read<std::uint64_t>(node + 8U) == 1U,
               "Serialized root instance range is incorrect");
-        Check(file.readString(node + 16U) == "Root", "Serialized root name is incorrect");
+        const auto nodeFlags = file.read<std::uint8_t>(node + 16U);
+        Check(f3d::HasValidNodeFlags(nodeFlags) && f3d::GetNodeType(nodeFlags) == f3d::NodeType::Node &&
+                  !f3d::IsSourceHidden(nodeFlags),
+              "Serialized root node flags are incorrect");
+        Check(file.readString(node + 17U) == "Root", "Serialized root name is incorrect");
 
         Check(file.read<std::uint8_t>(header.materialOffset + 0U) == 17U &&
                   file.read<std::uint8_t>(header.materialOffset + 1U) == 34U &&

@@ -1056,6 +1056,7 @@ namespace
 
                 const auto instanceEnd = static_cast<std::uint32_t>(sd.instances.size());
                 node.instanceCount = instanceEnd - node.firstInstance;
+                node.nodeFlags = scene::MakeNodeFlags(scene::NodeType::Node, false);
 
                 const auto completed = nodeIndex + 1U;
                 const bool progressCallbackDue =

@@ -56,13 +56,47 @@ namespace f3d
     inline constexpr std::uint64_t ChunkRecordBytes = 64U;
     inline constexpr std::uint64_t FormRecordBytes = 64U;
     inline constexpr std::uint64_t InstanceRecordBytes = 56U;
-    inline constexpr std::uint64_t MinimumNodeRecordBytes = 20U;
+    inline constexpr std::uint64_t MinimumNodeRecordBytes = 21U;
     inline constexpr std::uint64_t MaterialRecordBytes = 4U;
     inline constexpr std::uint64_t GeometryAlignment = 64U;
     inline constexpr std::uint64_t MaximumGeometrySlabBytes =
         1536ULL * 1024ULL * 1024ULL;
     inline constexpr std::uint32_t InvalidCacheIndex =
         std::numeric_limits<std::uint32_t>::max();
+
+    enum class NodeType : std::uint8_t
+    {
+        Node = 0,
+        Geometry = 1,
+        Obstruction = 2,
+        Insulation = 3
+    };
+
+    inline constexpr std::uint8_t kNodeTypeMask = 0x03u;
+    inline constexpr std::uint8_t kSourceHiddenFlag = 0x04u;
+    inline constexpr std::uint8_t kReservedNodeFlagsMask = 0xF8u;
+
+    [[nodiscard]] inline constexpr std::uint8_t MakeNodeFlags(const NodeType type,
+                                                               const bool sourceHidden) noexcept
+    {
+        return static_cast<std::uint8_t>((static_cast<std::uint8_t>(type) & kNodeTypeMask) |
+                                         (sourceHidden ? kSourceHiddenFlag : 0u));
+    }
+
+    [[nodiscard]] inline constexpr NodeType GetNodeType(const std::uint8_t nodeFlags) noexcept
+    {
+        return static_cast<NodeType>(nodeFlags & kNodeTypeMask);
+    }
+
+    [[nodiscard]] inline constexpr bool HasValidNodeFlags(const std::uint8_t nodeFlags) noexcept
+    {
+        return (nodeFlags & kReservedNodeFlagsMask) == 0u;
+    }
+
+    [[nodiscard]] inline constexpr bool IsSourceHidden(const std::uint8_t nodeFlags) noexcept
+    {
+        return (nodeFlags & kSourceHiddenFlag) != 0u;
+    }
 
     static_assert(std::endian::native == std::endian::little);
     static_assert(sizeof(float) == 4 && sizeof(std::uint32_t) == 4 &&
@@ -907,6 +941,7 @@ namespace f3d
         f3d::write(
             catalog.nodeStream,
             catalog.nodeInstanceCounts.back());
+        f3d::write(catalog.nodeStream, MakeNodeFlags(NodeType::Node, false));
         f3d::write(catalog.nodeStream, node.name);
 
         catalog.nodeBytes = CheckedAdd(

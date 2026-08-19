@@ -26,6 +26,40 @@ namespace scene
         NegZ = 5
     };
 
+    enum class NodeType : std::uint8_t
+    {
+        Node = 0,
+        Geometry = 1,
+        Obstruction = 2,
+        Insulation = 3
+    };
+
+    inline constexpr std::uint8_t kNodeTypeMask = 0x03u;
+    inline constexpr std::uint8_t kSourceHiddenFlag = 0x04u;
+    inline constexpr std::uint8_t kReservedNodeFlagsMask = 0xF8u;
+
+    [[nodiscard]] inline constexpr std::uint8_t MakeNodeFlags(const NodeType type,
+                                                               const bool sourceHidden = false) noexcept
+    {
+        return static_cast<std::uint8_t>((static_cast<std::uint8_t>(type) & kNodeTypeMask) |
+                                         (sourceHidden ? kSourceHiddenFlag : 0u));
+    }
+
+    [[nodiscard]] inline constexpr NodeType GetNodeType(const std::uint8_t nodeFlags) noexcept
+    {
+        return static_cast<NodeType>(nodeFlags & kNodeTypeMask);
+    }
+
+    [[nodiscard]] inline constexpr bool HasValidNodeFlags(const std::uint8_t nodeFlags) noexcept
+    {
+        return (nodeFlags & kReservedNodeFlagsMask) == 0u;
+    }
+
+    [[nodiscard]] inline constexpr bool IsSourceHidden(const std::uint8_t nodeFlags) noexcept
+    {
+        return (nodeFlags & kSourceHiddenFlag) != 0u;
+    }
+
     constexpr std::uint32_t kInvalidIndex = UINT32_MAX;
 
     // One GPU-sized planar geometry slab. A .3d file stores these arrays as
@@ -86,6 +120,7 @@ namespace scene
         std::int32_t parent = -1; // -1 = root
         std::uint32_t firstInstance = 0;
         std::uint32_t instanceCount = 0;
+        std::uint8_t nodeFlags = MakeNodeFlags(NodeType::Node, false);
         std::string name; // UTF-8 / ANSI
     };
 
