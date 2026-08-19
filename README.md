@@ -9,6 +9,7 @@ emits one of:
 | Autodesk FBX        | `.fbx`  | Working (mesh normals and materials) |
 | AVEVA RVM           | `.rvm`  | Working (flat facet normals) |
 | FalconCoding 3D    | `.3d`  | Working (instanced meshes with normals) |
+| Navisworks NWD      | `.nwd`  | Working (hierarchy, normals and materials) |
 | Khronos glTF        | `.gltf` | Working (positions, normals and materials) |
 | Wavefront OBJ       | `.obj`  | Working (positions, normals and faces) |
 | Hierarchy text      | `.txt`  | Working |

@@ -17,6 +17,7 @@
 #include "ConvertOBJ.h"
 #include "ConvertRVM.h"
 #include "ConvertTXT.h"
+#include "ConvertNWD.h"
 
 #include "WriteStatistics.h"
 
@@ -76,6 +77,9 @@ static bool convert(const std::string& source_cad, const std::string& target_cad
 		break;
 	case GeometryData:
 		result = data::convert(data);
+		break;
+	case NavisworksNWD:
+		result = nwd::convert(data);
 		break;
 	default:
 		throw std::logic_error("Unsupported target type");

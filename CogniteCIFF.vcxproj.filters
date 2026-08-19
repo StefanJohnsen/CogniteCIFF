@@ -58,6 +58,9 @@
     <ClInclude Include="ConvertRVM.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="ConvertNWD.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
     <ClInclude Include="ConvertTXT.h">
       <Filter>Source Files</Filter>
     </ClInclude>
@@ -107,6 +110,12 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="Zlib.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BlowfishNWD.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WriteNWD.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="WriteStatistics.h">

@@ -162,6 +162,7 @@
     <ClInclude Include="ConvertJSON.h" />
     <ClInclude Include="ConvertOBJ.h" />
     <ClInclude Include="ConvertRVM.h" />
+    <ClInclude Include="ConvertNWD.h" />
     <ClInclude Include="ConvertTXT.h" />
     <ClInclude Include="FileType.h" />
     <ClInclude Include="MeshNormals.h" />
@@ -179,6 +180,8 @@
     <ClInclude Include="Util.h" />
     <ClInclude Include="WriteBuffer.h" />
     <ClInclude Include="Zlib.h" />
+    <ClInclude Include="BlowfishNWD.h" />
+    <ClInclude Include="WriteNWD.h" />
     <ClInclude Include="WriteStatistics.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

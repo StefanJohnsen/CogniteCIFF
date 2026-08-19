@@ -1038,7 +1038,7 @@ namespace zlib
     {
         using namespace detail;
 
-        if (dstSize > static_cast<size_t>(std::numeric_limits<ptrdiff_t>::max()))
+        if (dstSize > static_cast<size_t>((std::numeric_limits<ptrdiff_t>::max)()))
             return inflate_error::destination_too_large;
 
         if ((dstSize != 0 && dst == nullptr) || src == nullptr)
@@ -1653,7 +1653,7 @@ namespace zlib
     {
         using namespace deflate_detail;
 
-        if (srcSize > static_cast<size_t>(std::numeric_limits<ptrdiff_t>::max()))
+        if (srcSize > static_cast<size_t>((std::numeric_limits<ptrdiff_t>::max)()))
             return destination_too_large;
 
         if ((dstSize != 0 && dst == nullptr) || (srcSize != 0 && src == nullptr))

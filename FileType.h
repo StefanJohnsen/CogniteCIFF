@@ -17,7 +17,8 @@ enum fileType : uint8_t
 	KhronosGLTF,
 	HierarchyTXT,
 	HierarchyJSON,
-	GeometryData
+	GeometryData,
+	NavisworksNWD
 };
 
 inline fileType sourceType(const std::string& file)
@@ -60,6 +61,8 @@ inline fileType targetType(const std::string& file)
 
 	if (ext == ".dat")
 		return GeometryData;
+	if (ext == ".nwd")
+		return NavisworksNWD;
 
 	return UnknownCAD;
 }
@@ -77,6 +80,7 @@ inline std::string mode(const std::string& file, const bool source)
 	case AutodeskFBX:
 	case AvevaRVM:
 	case Falcon3D:
+	case NavisworksNWD:
 		return source ? "rb" : "wb";
 	case WavefrontOBJ:
 	case KhronosGLTF:
