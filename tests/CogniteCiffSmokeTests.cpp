@@ -55,6 +55,30 @@ namespace
             Fail(message);
     }
 
+    void ValidateNodeFlagsContract()
+    {
+        Check(static_cast<std::uint8_t>(scene::NodeType::Node) == 0U &&
+                  static_cast<std::uint8_t>(scene::NodeType::Obstruction) == 1U &&
+                  static_cast<std::uint8_t>(scene::NodeType::Insulation) == 2U,
+              "SceneData node type values are incorrect");
+        Check(!scene::HasValidNodeFlags(0x03U) && !scene::HasValidNodeFlags(0x08U),
+              "SceneData accepts reserved node flags");
+
+        auto sceneFlags = scene::MakeNodeFlags(scene::NodeType::Obstruction);
+        scene::SetHidden(sceneFlags, true);
+        Check(scene::HasValidNodeFlags(sceneFlags) && scene::IsHidden(sceneFlags) &&
+                  scene::GetNodeType(sceneFlags) == scene::NodeType::Obstruction,
+              "SceneData hidden flag changed the node type");
+        scene::SetHidden(sceneFlags, false);
+        Check(!scene::IsHidden(sceneFlags), "SceneData hidden flag was not cleared");
+
+        auto binaryFlags = f3d::MakeNodeFlags(f3d::NodeType::Insulation);
+        f3d::SetHidden(binaryFlags, true);
+        Check(f3d::HasValidNodeFlags(binaryFlags) && f3d::IsHidden(binaryFlags) &&
+                  f3d::GetNodeType(binaryFlags) == f3d::NodeType::Insulation && !f3d::HasValidNodeFlags(0x03U),
+              "Falcon3D node flag contract is incorrect");
+    }
+
     class TempDirectory final
     {
       public:
@@ -357,7 +381,7 @@ namespace
               "Root instance range is incorrect");
         Check(scene::HasValidNodeFlags(node.nodeFlags) &&
                   scene::GetNodeType(node.nodeFlags) == scene::NodeType::Node &&
-                  !scene::IsSourceHidden(node.nodeFlags),
+                  !scene::IsHidden(node.nodeFlags),
               "Root node flags are incorrect");
         Check(node.name == "Root", "Root name was not preserved");
     }
@@ -426,7 +450,7 @@ namespace
         Check(sentinel.nodes.size() == 1U && sentinel.nodes.front().name == "unchanged" &&
                   sentinel.nodes.front().firstInstance == 9U && sentinel.nodes.front().instanceCount == 11U &&
                   scene::GetNodeType(sentinel.nodes.front().nodeFlags) == scene::NodeType::Node &&
-                  scene::IsSourceHidden(sentinel.nodes.front().nodeFlags),
+                  scene::IsHidden(sentinel.nodes.front().nodeFlags),
               "Cancelled conversion changed the sentinel hierarchy");
         Check(sentinel.materials.size() == 1U && sentinel.materials.front().textureIndex == 5U,
               "Cancelled conversion changed the sentinel material table");
@@ -644,7 +668,7 @@ namespace
               "Serialized root instance range is incorrect");
         const auto nodeFlags = file.read<std::uint8_t>(node + 16U);
         Check(f3d::HasValidNodeFlags(nodeFlags) && f3d::GetNodeType(nodeFlags) == f3d::NodeType::Node &&
-                  !f3d::IsSourceHidden(nodeFlags),
+                  !f3d::IsHidden(nodeFlags),
               "Serialized root node flags are incorrect");
         Check(file.readString(node + 17U) == "Root", "Serialized root name is incorrect");
 
@@ -663,6 +687,7 @@ int main(const int argc, char* argv[])
         if (argc == 2)
             return RunBenchmark(std::filesystem::path(argv[1]));
         Check(argc == 1, "Usage: CogniteCiffSmokeTests.exe [model.ciff]");
+        ValidateNodeFlagsContract();
 
         const TempDirectory temp;
         const auto ciffPath = temp.path() / "triangle.ciff";

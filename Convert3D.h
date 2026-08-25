@@ -67,20 +67,18 @@ namespace f3d
     enum class NodeType : std::uint8_t
     {
         Node = 0,
-        Geometry = 1,
-        Obstruction = 2,
-        Insulation = 3
+        Obstruction = 1,
+        Insulation = 2
     };
 
     inline constexpr std::uint8_t kNodeTypeMask = 0x03u;
-    inline constexpr std::uint8_t kSourceHiddenFlag = 0x04u;
+    inline constexpr std::uint8_t kHiddenFlag = 0x04u;
     inline constexpr std::uint8_t kReservedNodeFlagsMask = 0xF8u;
 
-    [[nodiscard]] inline constexpr std::uint8_t MakeNodeFlags(const NodeType type,
-                                                               const bool sourceHidden) noexcept
+    [[nodiscard]] inline constexpr std::uint8_t MakeNodeFlags(const NodeType type, const bool hidden = false) noexcept
     {
         return static_cast<std::uint8_t>((static_cast<std::uint8_t>(type) & kNodeTypeMask) |
-                                         (sourceHidden ? kSourceHiddenFlag : 0u));
+                                         (hidden ? kHiddenFlag : 0u));
     }
 
     [[nodiscard]] inline constexpr NodeType GetNodeType(const std::uint8_t nodeFlags) noexcept
@@ -90,12 +88,17 @@ namespace f3d
 
     [[nodiscard]] inline constexpr bool HasValidNodeFlags(const std::uint8_t nodeFlags) noexcept
     {
-        return (nodeFlags & kReservedNodeFlagsMask) == 0u;
+        return (nodeFlags & kReservedNodeFlagsMask) == 0u && (nodeFlags & kNodeTypeMask) != kNodeTypeMask;
     }
 
-    [[nodiscard]] inline constexpr bool IsSourceHidden(const std::uint8_t nodeFlags) noexcept
+    [[nodiscard]] inline constexpr bool IsHidden(const std::uint8_t nodeFlags) noexcept
     {
-        return (nodeFlags & kSourceHiddenFlag) != 0u;
+        return (nodeFlags & kHiddenFlag) != 0u;
+    }
+
+    inline constexpr void SetHidden(std::uint8_t& nodeFlags, const bool hidden) noexcept
+    {
+        nodeFlags = static_cast<std::uint8_t>(hidden ? nodeFlags | kHiddenFlag : nodeFlags & ~kHiddenFlag);
     }
 
     static_assert(std::endian::native == std::endian::little);
