@@ -51,15 +51,7 @@ namespace ciff
 			for (nodeIndex = 0; nodeIndex < data.nodes.size(); ++nodeIndex)
 			{
 				bar::step(nodeIndex);
-				const auto& node = data.nodes[nodeIndex];
-
-				if (nodeIndex == 0)
-					WriteHead(node);
-				else
-					WriteModel(node);
-
-				for (const auto geometryIndex : node.geometries)
-					WriteGeometry(node, geometryIndex);
+				convertNode(nodeIndex, data.nodes[nodeIndex]);
 			}
 
 			WriteMaterial(true);
@@ -68,6 +60,19 @@ namespace ciff
 		}
 
 	public:
+		void convertNode(const size_t index, const Node& node)
+		{
+			nodeIndex = index;
+
+			if (index == 0)
+				WriteHead(node);
+			else
+				WriteModel(node);
+
+			for (const auto geometryIndex : node.geometries)
+				WriteGeometry(node, geometryIndex);
+		}
+
 		virtual bool SetFile()
 		{
 			if (write.good())
