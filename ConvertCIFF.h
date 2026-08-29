@@ -290,8 +290,15 @@ namespace ciff::clone
 
 		void WriteGeometry(const ciff::Node&, const size_t geometryIndex) override
 		{
-			const auto mesh = TessellateGeometry(data, geometryIndex);
-			MeshGeometry::Write(write, mesh);
+			const auto& geometry = data.getGeometry(geometryIndex);
+
+			if (geometry.primitive == Type::Mesh)
+			{
+				MeshGeometry::Write(write, data.getMesh(geometry.mesh));
+				return;
+			}
+
+			MeshGeometry::Write(write, TessellateGeometry(data, geometryIndex));
 		}
 
 		void WriteMaterial(bool) override
