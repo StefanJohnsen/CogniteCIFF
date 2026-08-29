@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -251,7 +252,18 @@ namespace bar
 		progress_stop = true;
 	}
 
-	inline void step(const size_t step)
+	inline void cancel()
+	{
+		if (progress_idle) return;
+		if (progress_stop) return;
+
+		std::cout << std::endl;
+		clear();
+		show_cursor();
+		progress_stop = true;
+	}
+
+	inline void step(const size_t step, const bool allowCompletion = true)
 	{
 		if (progress_idle) return;
 		if (progress_stop) return;
@@ -261,13 +273,15 @@ namespace bar
 
 		if (step > progress_total) return;
 
-		if (step == progress_total)
+		if (step == progress_total && allowCompletion)
 		{
 			stop();
 			return;
 		}
 
-		const auto temp = (step * 100 + progress_total / 2) / progress_total;
+		auto temp = (step * 100 + progress_total / 2) / progress_total;
+		if (!allowCompletion)
+			temp = std::min<size_t>(temp, 99U);
 
 		if (temp == progress_current)
 			return;

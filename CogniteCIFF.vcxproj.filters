@@ -34,6 +34,9 @@
     <ClInclude Include="Convert.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="ConvertAsync.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
     <ClInclude Include="ConvertCIFF.h">
       <Filter>Source Files</Filter>
     </ClInclude>

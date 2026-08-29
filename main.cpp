@@ -91,11 +91,26 @@ static bool convert(const std::string& source_cad, const std::string& target_cad
 
 static bool evaluateArg()
 {
+	const bool targetIsDirectory = !cmd::target.empty() && std::filesystem::is_directory(cmd::target);
+
 	if (cmd::speedtest)
 	{
 		cmd::bar = false;
 		cmd::statistics = false;
 		WriteBuffer::enabled = false;
+	}
+
+	if (cmd::async)
+	{
+		const auto asyncTargetExtension = cmd::target.empty() || targetIsDirectory
+			? "." + cmd::defaultTargetExt()
+			: cmd::tolower(cmd::target.extension().string());
+
+		if (asyncTargetExtension != ".ciff")
+		{
+			cmd::err("Async conversion is only supported for ciff target format.");
+			return false;
+		}
 	}
 
 	return true;

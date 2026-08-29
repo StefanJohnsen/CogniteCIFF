@@ -154,6 +154,7 @@
     <ClInclude Include="CmdTimer.h" />
     <ClInclude Include="Constants.h" />
     <ClInclude Include="Convert.h" />
+    <ClInclude Include="ConvertAsync.h" />
     <ClInclude Include="ConvertCIFF.h" />
     <ClInclude Include="ConvertDAT.h" />
     <ClInclude Include="ConvertFBX.h" />

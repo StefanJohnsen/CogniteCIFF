@@ -1,8 +1,10 @@
 #pragma once
 
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "CmdBar.h"
 #include "ReadCIFF.h"
@@ -12,7 +14,16 @@ namespace ciff
 {
 	struct Convert
 	{
-		explicit Convert(Read& data) : data(data)
+		struct AsyncSharedState
+		{
+		};
+
+		struct AsyncChunkState
+		{
+		};
+
+		explicit Convert(Read& data, const size_t writeBufferSize = WRITE_BUFFER_SIZE)
+			: data(data), write(writeBufferSize)
 		{
 		}
 
@@ -75,12 +86,17 @@ namespace ciff
 
 		virtual bool SetFile()
 		{
+			return SetFile(std::filesystem::path(data.target_cad));
+		}
+
+		bool SetFile(const std::filesystem::path& target)
+		{
 			if (write.good())
 				return false;
 
-			write.set(data.target_cad);
+			write.set(target.string());
 			source_file = data.source_cad;
-			target_file = data.target_cad;
+			target_file = target.string();
 			return true;
 		}
 
@@ -100,6 +116,43 @@ namespace ciff
 		virtual void WriteGeometry(const Node& node, size_t geometryIndex) = 0;
 		virtual void WriteMaterial(bool header) = 0;
 		virtual void WriteFooter() = 0;
+
+		[[nodiscard]] AsyncSharedState PrepareAsyncSharedState()
+		{
+			return {};
+		}
+
+		void AttachAsyncSharedState(const AsyncSharedState&)
+		{
+		}
+
+		void PrepareAsyncChunk(AsyncChunkState&)
+		{
+		}
+
+		void BeginAsyncMerge()
+		{
+		}
+
+		void PrepareAsyncChunkForMerge(AsyncChunkState&)
+		{
+		}
+
+		void MergeAsyncChunk(const std::filesystem::path& shardFile, const AsyncChunkState&,
+			const bool outputEnabled)
+		{
+			if (outputEnabled)
+				write.append(shardFile.string(), false);
+		}
+
+		void CommitAsyncMerge() noexcept
+		{
+		}
+
+		[[nodiscard]] std::vector<std::filesystem::path> AsyncSidecarFiles() const
+		{
+			return {};
+		}
 
 		[[nodiscard]] std::vector<rgb> getColors() const
 		{

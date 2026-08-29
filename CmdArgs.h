@@ -73,6 +73,7 @@ namespace cmd
 	inline const std::vector<std::string> source_ext = { "ciff" };
 	inline const std::vector<std::string> target_ext = { "ciff", "fbx", "rvm", "3d", "gltf", "obj", "json", "dat", "txt", "nwd" };
 
+	inline cmd_flag async{ "async" };
 	inline cmd_flag help{ "help" };
 	inline cmd_flag version{ "version" };
 	inline cmd_flag bar{ "bar" };
@@ -80,7 +81,7 @@ namespace cmd
 	inline cmd_flag speedtest{ "speedtest" };
 	inline const std::string format_flag = "format";
 
-	inline const std::vector<cmd_flag*> cmd_flags = { &help, &version, &bar, &statistics, &speedtest };
+	inline const std::vector<cmd_flag*> cmd_flags = { &async, &help, &version, &bar, &statistics, &speedtest };
 
 	inline std::string join(const std::vector<std::string>& v, const char* delim)
 	{
@@ -103,6 +104,8 @@ namespace cmd
 
 			s += "\nUsage: <source_file_or_directory> [target_file_or_directory] [options]\n\n";
 			s += "Options:\n\n";
+			s += "  -async        Run conversion in parallel worker threads\n";
+			s += "                Currently supported only for ciff target format\n";
 			s += "  -help         Show this help message\n";
 			s += "  -version      Version\n";
 			s += "  -bar          Show progress bar\n";

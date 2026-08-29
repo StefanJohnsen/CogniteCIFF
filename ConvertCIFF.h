@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "Convert.h"
+#include "ConvertAsync.h"
 #include "ProcessCIFF.h"
 
 namespace ciff::clone
@@ -274,7 +275,8 @@ namespace ciff::clone
 
 	struct Convert final : ciff::Convert
 	{
-		explicit Convert(ciff::Read& data) : ciff::Convert(data)
+		explicit Convert(ciff::Read& data, const size_t writeBufferSize = WRITE_BUFFER_SIZE)
+			: ciff::Convert(data, writeBufferSize)
 		{
 		}
 
@@ -314,7 +316,7 @@ namespace ciff::clone
 
 	inline bool convert(ciff::Read& data)
 	{
-		return Convert(data).run();
+		return cmd::async ? ConvertAsync<Convert>(data).run() : Convert(data).run();
 	}
 } // namespace ciff::clone
 
