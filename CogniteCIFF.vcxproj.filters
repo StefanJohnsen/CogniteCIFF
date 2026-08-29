@@ -37,6 +37,9 @@
     <ClInclude Include="ConvertAsync.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="ConversionOutput.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
     <ClInclude Include="ConvertCIFF.h">
       <Filter>Source Files</Filter>
     </ClInclude>
@@ -101,9 +104,6 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="StreamFile.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="TempFile.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="Util.h">

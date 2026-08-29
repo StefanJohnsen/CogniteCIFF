@@ -17,11 +17,6 @@
 
 #pragma once
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -33,15 +28,14 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <unordered_map>
 #include <vector>
 
 #include "Convert.h"
+#include "ConversionOutput.h"
 #include "MeshNormals.h"
 #include "PrimitiveInstanceCIFF.h"
 #include "PrimitiveStatsCIFF.h"
-#include "TempFile.h"
 #include "Util.h"
 #include "WriteBuffer.h"
 
@@ -250,9 +244,9 @@ namespace f3d
         std::uint64_t indexBytes = 0U;
         std::uint32_t vertexCount = 0U;
         std::uint32_t indexCount = 0U;
-        std::optional<TempFile> positionTemp;
-        std::optional<TempFile> normalTemp;
-        std::optional<TempFile> indexTemp;
+        std::optional<std::filesystem::path> positionTemp;
+        std::optional<std::filesystem::path> normalTemp;
+        std::optional<std::filesystem::path> indexTemp;
     };
 
     struct Catalog
@@ -276,10 +270,9 @@ namespace f3d
         WriteBuffer normalStream;
         WriteBuffer indexStream;
 
-        std::optional<TempFile> formTemp;
-        std::optional<TempFile> instanceTemp;
-        std::optional<TempFile> nodeTemp;
-        std::filesystem::path tempDirectory;
+        std::optional<std::filesystem::path> formTemp;
+        std::optional<std::filesystem::path> instanceTemp;
+        std::optional<std::filesystem::path> nodeTemp;
         std::vector<ChunkScratch> chunks;
 
         std::unordered_map<std::uint64_t, std::uint32_t, IdentityHash64>
@@ -374,12 +367,6 @@ namespace f3d
             closeSilently(catalog.normalStream);
             closeSilently(catalog.indexStream);
 
-            if (!outputTempPath.empty())
-            {
-                std::error_code ignored;
-                if (std::filesystem::is_regular_file(outputTempPath, ignored))
-                    std::filesystem::remove(outputTempPath, ignored);
-            }
         }
 
         bool run()
@@ -408,42 +395,24 @@ namespace f3d
             if (write.good())
                 return false;
 
-            namespace fs = std::filesystem;
             source_file = data.source_cad;
             target_file = data.target_cad;
-            const auto requestedTarget = fs::path(target_file);
+            const auto requestedTarget = std::filesystem::path(target_file);
             if (requestedTarget.empty() || requestedTarget.filename().empty())
                 throw std::invalid_argument("Falcon3D output path has no file name");
-
-            targetPath = fs::absolute(requestedTarget).lexically_normal();
-            catalog.tempDirectory =
-                targetPath.parent_path() / (targetPath.stem().string() + ".3d_tmp");
 
             if (!WriteBuffer::enabled)
                 return true;
 
-            outputTempPath = targetPath;
-            outputTempPath += L".tmp";
+            workspace.emplace(requestedTarget);
+            write.set(workspace->result().string());
 
-            std::error_code error;
-            const auto staleExists = fs::exists(outputTempPath, error);
-            if (error)
-                throw std::runtime_error("Failed to inspect Falcon3D output temp file");
-            if (staleExists && !fs::is_regular_file(outputTempPath, error))
-                throw std::runtime_error("Falcon3D output temp path is not a regular file");
-            if (error)
-                throw std::runtime_error("Failed to inspect Falcon3D output temp file");
-            if (staleExists && (!fs::remove(outputTempPath, error) || error))
-                throw std::runtime_error("Failed to remove stale Falcon3D output temp file");
-
-            write.set(outputTempPath.string());
-
-            catalog.formTemp.emplace(catalog.tempDirectory, "forms.bin");
-            catalog.instanceTemp.emplace(catalog.tempDirectory, "instances.bin");
-            catalog.nodeTemp.emplace(catalog.tempDirectory, "nodes.bin");
-            catalog.formStream.set(catalog.formTemp->path().string());
-            catalog.instanceStream.set(catalog.instanceTemp->path().string());
-            catalog.nodeStream.set(catalog.nodeTemp->path().string());
+            catalog.formTemp.emplace(workspace->file("forms.bin"));
+            catalog.instanceTemp.emplace(workspace->file("instances.bin"));
+            catalog.nodeTemp.emplace(workspace->file("nodes.bin"));
+            catalog.formStream.set(catalog.formTemp->string());
+            catalog.instanceStream.set(catalog.instanceTemp->string());
+            catalog.nodeStream.set(catalog.nodeTemp->string());
             return true;
         }
 
@@ -451,28 +420,19 @@ namespace f3d
         {
             if (!WriteBuffer::enabled)
                 return;
-            if (outputTempPath.empty() || catalog.expectedOutputBytes == 0U)
+            if (!workspace || catalog.expectedOutputBytes == 0U)
                 throw std::logic_error(
                     "Falcon3D output was not completed before publication");
 
             CloseChecked(write, "output");
             std::error_code error;
-            const auto outputBytes = std::filesystem::file_size(outputTempPath, error);
+            const auto outputBytes = std::filesystem::file_size(workspace->result(), error);
             if (error || outputBytes != catalog.expectedOutputBytes)
                 throw std::ios_base::failure(
                     "Falcon3D completed output size is invalid");
 
-            if (!::MoveFileExW(
-                    outputTempPath.c_str(),
-                    targetPath.c_str(),
-                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            {
-                throw std::system_error(
-                    static_cast<int>(::GetLastError()),
-                    std::system_category(),
-                    "Failed to publish Falcon3D output");
-            }
-            outputTempPath.clear();
+            workspace->publish();
+            workspace.reset();
         }
 
         void WriteHeader() override;
@@ -494,9 +454,8 @@ namespace f3d
             Footer::Write(*this);
         }
 
+        std::optional<conversion::Workspace> workspace;
         Catalog catalog;
-        std::filesystem::path targetPath;
-        std::filesystem::path outputTempPath;
     };
 
     inline void ValidateNodeHierarchy(const ciff::Read& data)
@@ -582,8 +541,9 @@ namespace f3d
         AddHashBytes(hash, &value, sizeof(value));
     }
 
-    inline void StartGeometryChunk(Catalog& catalog)
+    inline void StartGeometryChunk(Convert& convert)
     {
+        auto& catalog = convert.catalog;
         CloseChecked(catalog.positionStream, "position scratch");
         CloseChecked(catalog.normalStream, "normal scratch");
         CloseChecked(catalog.indexStream, "index scratch");
@@ -602,18 +562,17 @@ namespace f3d
 
         auto& chunk = catalog.chunks.back();
         const auto number = std::to_string(catalog.chunks.size() - 1U);
+        if (!convert.workspace)
+            throw std::logic_error("Falcon3D conversion workspace is missing");
         chunk.positionTemp.emplace(
-            catalog.tempDirectory,
-            "chunk_" + number + "_positions.bin");
+            convert.workspace->file("chunk_" + number + "_positions.bin"));
         chunk.normalTemp.emplace(
-            catalog.tempDirectory,
-            "chunk_" + number + "_normals.bin");
+            convert.workspace->file("chunk_" + number + "_normals.bin"));
         chunk.indexTemp.emplace(
-            catalog.tempDirectory,
-            "chunk_" + number + "_indices.bin");
-        catalog.positionStream.set(chunk.positionTemp->path().string());
-        catalog.normalStream.set(chunk.normalTemp->path().string());
-        catalog.indexStream.set(chunk.indexTemp->path().string());
+            convert.workspace->file("chunk_" + number + "_indices.bin"));
+        catalog.positionStream.set(chunk.positionTemp->string());
+        catalog.normalStream.set(chunk.normalTemp->string());
+        catalog.indexStream.set(chunk.indexTemp->string());
     }
 
     inline void FormGeometry::Write(
@@ -727,7 +686,7 @@ namespace f3d
                            chunk.indexCount;
         }();
         if (requiresNewChunk)
-            StartGeometryChunk(catalog);
+            StartGeometryChunk(convert);
 
         auto& chunk = catalog.chunks.back();
         const auto chunkIndex =
@@ -1177,7 +1136,7 @@ namespace f3d
     }
 
     inline void ValidateScratchFile(
-        const std::optional<TempFile>& temp,
+        const std::optional<std::filesystem::path>& temp,
         const std::uint64_t expected,
         const char* sectionName)
     {
@@ -1190,7 +1149,7 @@ namespace f3d
 
         std::error_code error;
         const auto bytes =
-            std::filesystem::file_size(temp->path(), error);
+            std::filesystem::file_size(*temp, error);
         if (error || bytes != expected)
             throw std::logic_error(
                 std::string("Falcon3D ") + sectionName +
@@ -1199,7 +1158,7 @@ namespace f3d
 
     inline void AppendScratch(
         WriteBuffer& output,
-        const std::optional<TempFile>& temp,
+        const std::optional<std::filesystem::path>& temp,
         const char* sectionName)
     {
         if (!WriteBuffer::enabled)
@@ -1208,7 +1167,7 @@ namespace f3d
             throw std::logic_error(
                 std::string("Falcon3D ") + sectionName +
                 " scratch file is missing");
-        output.append(temp->path().string());
+        output.append(temp->string());
     }
 
     inline void Footer::Write(Convert& convert)

@@ -26,11 +26,11 @@
 #endif
 
 #include "BlowfishNWD.h"
+#include "ConversionOutput.h"
 #include "Zlib.h"
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstddef>
@@ -42,20 +42,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#ifndef _WIN32
-#include <cerrno>
-#include <fcntl.h>
-#include <unistd.h>
-#endif
-
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 
 namespace nwd::write
 {
@@ -1212,187 +1201,6 @@ namespace nwd::write
             return makeContainer(std::move(chunks));
         }
 
-        struct TemporaryFile
-        {
-            std::filesystem::path path;
-            bool remove = true;
-
-            [[nodiscard]] static TemporaryFile create(const std::filesystem::path& target)
-            {
-                static auto serial = std::atomic_uint64_t{0U};
-                const auto allocation = serial.fetch_add(1U, std::memory_order_relaxed);
-#ifdef _WIN32
-                const auto process = static_cast<uint64_t>(GetCurrentProcessId());
-#else
-                const auto process = static_cast<uint64_t>(::getpid());
-#endif
-                for (size_t suffix = 0U; suffix < 10000U; ++suffix)
-                {
-                    auto candidate = target;
-                    candidate += ".tmp." + std::to_string(process) + "." +
-                                 std::to_string(allocation) + "." + std::to_string(suffix);
-#ifdef _WIN32
-                    const auto file = CreateFileW(candidate.c_str(), GENERIC_WRITE, 0U, nullptr,
-                                                  CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-                    if (file != INVALID_HANDLE_VALUE)
-                        return TemporaryFile{std::move(candidate), file};
-                    const auto error = GetLastError();
-                    if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS)
-                        continue;
-                    throw std::system_error(static_cast<int>(error), std::system_category(),
-                                            "Unable to create temporary NWD target " +
-                                                candidate.string());
-#else
-                    const auto file = ::open(candidate.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
-                    if (file >= 0)
-                        return TemporaryFile{std::move(candidate), file};
-                    if (errno == EEXIST)
-                        continue;
-                    throw std::system_error(errno, std::generic_category(),
-                                            "Unable to create temporary NWD target " +
-                                                candidate.string());
-#endif
-                }
-                throw std::runtime_error("Unable to allocate a temporary NWD target");
-            }
-
-            TemporaryFile(const TemporaryFile&) = delete;
-            TemporaryFile& operator=(const TemporaryFile&) = delete;
-            TemporaryFile(TemporaryFile&& other) noexcept
-                : path(std::move(other.path)), remove(std::exchange(other.remove, false)),
-                  handle_(std::exchange(other.handle_, InvalidHandle))
-            {
-            }
-
-            void write(const std::span<const uint8_t> bytes)
-            {
-                if (handle_ == InvalidHandle)
-                    throw std::logic_error("Temporary NWD target is closed");
-                auto offset = size_t{};
-                while (offset < bytes.size())
-                {
-#ifdef _WIN32
-                    const auto request = static_cast<DWORD>(std::min<size_t>(
-                        bytes.size() - offset, std::numeric_limits<DWORD>::max()));
-                    auto written = DWORD{};
-                    if (!WriteFile(handle_, bytes.data() + offset, request, &written, nullptr))
-                    {
-                        throw std::system_error(static_cast<int>(GetLastError()),
-                                                std::system_category(),
-                                                "Unable to write temporary NWD target");
-                    }
-                    if (written == 0U)
-                        throw std::runtime_error("Unable to write complete temporary NWD target");
-                    offset += written;
-#else
-                    const auto result = ::write(handle_, bytes.data() + offset, bytes.size() - offset);
-                    if (result < 0)
-                    {
-                        if (errno == EINTR)
-                            continue;
-                        throw std::system_error(errno, std::generic_category(),
-                                                "Unable to write temporary NWD target");
-                    }
-                    if (result == 0)
-                        throw std::runtime_error("Unable to write complete temporary NWD target");
-                    offset += static_cast<size_t>(result);
-#endif
-                }
-            }
-
-            void flush()
-            {
-                if (handle_ == InvalidHandle)
-                    throw std::logic_error("Temporary NWD target is closed");
-#ifdef _WIN32
-                if (!FlushFileBuffers(handle_))
-                {
-                    throw std::system_error(static_cast<int>(GetLastError()),
-                                            std::system_category(),
-                                            "Unable to flush temporary NWD target");
-                }
-#else
-                if (::fsync(handle_) != 0)
-                    throw std::system_error(errno, std::generic_category(),
-                                            "Unable to flush temporary NWD target");
-#endif
-            }
-
-            void close()
-            {
-                if (handle_ == InvalidHandle)
-                    return;
-                const auto file = std::exchange(handle_, InvalidHandle);
-#ifdef _WIN32
-                if (!CloseHandle(file))
-                {
-                    throw std::system_error(static_cast<int>(GetLastError()),
-                                            std::system_category(),
-                                            "Unable to close temporary NWD target");
-                }
-#else
-                if (::close(file) != 0)
-                    throw std::system_error(errno, std::generic_category(),
-                                            "Unable to close temporary NWD target");
-#endif
-            }
-
-            ~TemporaryFile() noexcept
-            {
-                closeNoThrow();
-                if (!remove || path.empty())
-                    return;
-                auto error = std::error_code{};
-                std::filesystem::remove(path, error);
-            }
-
-          private:
-#ifdef _WIN32
-            using NativeHandle = HANDLE;
-            static inline const NativeHandle InvalidHandle = INVALID_HANDLE_VALUE;
-#else
-            using NativeHandle = int;
-            static constexpr NativeHandle InvalidHandle = -1;
-#endif
-
-            TemporaryFile(std::filesystem::path value, const NativeHandle file)
-                : path(std::move(value)), handle_(file)
-            {
-            }
-
-            void closeNoThrow() noexcept
-            {
-                if (handle_ == InvalidHandle)
-                    return;
-                const auto file = std::exchange(handle_, InvalidHandle);
-#ifdef _WIN32
-                CloseHandle(file);
-#else
-                ::close(file);
-#endif
-            }
-
-            NativeHandle handle_ = InvalidHandle;
-        };
-
-        inline void replaceFile(const std::filesystem::path& temporary,
-                                const std::filesystem::path& target)
-        {
-#ifdef _WIN32
-            if (!MoveFileExW(temporary.c_str(), target.c_str(),
-                             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            {
-                throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
-                                        "Unable to replace NWD target " + target.string());
-            }
-#else
-            auto error = std::error_code{};
-            std::filesystem::rename(temporary, target, error);
-            if (error)
-                throw std::system_error(error, "Unable to replace NWD target " + target.string());
-#endif
-        }
-
         inline constexpr uint32_t GeometryPageCapacity = 65536U;
         inline constexpr uint32_t MaximumTrianglesPerRecord = 21845U;
 
@@ -2427,12 +2235,9 @@ namespace nwd::write
         if (!parent.empty() && (!std::filesystem::is_directory(parent, error) || error))
             throw std::runtime_error("NWD target directory does not exist: " + parent.string());
         const auto container = makeSemantic(scene);
-        auto temporary = detail::TemporaryFile::create(target);
+        auto temporary = conversion::AtomicFile::create(target);
         temporary.write(container);
-        temporary.flush();
-        temporary.close();
-        detail::replaceFile(temporary.path, target);
-        temporary.remove = false;
+        temporary.publish();
     }
 } // namespace nwd::write
 

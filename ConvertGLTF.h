@@ -29,9 +29,9 @@
 #include <vector>
 
 #include "Convert.h"
+#include "ConversionOutput.h"
 #include "MeshNormals.h"
 #include "ProcessCIFF.h"
-#include "TempFile.h"
 #include "Util.h"
 #include "WriteBuffer.h"
 
@@ -93,80 +93,6 @@ namespace gltf
 	{
 		w.write(text.str());
 	}
-
-	struct TempFiles
-	{
-		inline static filesystem::path directory;
-		inline static optional<TempFile> meshes;
-		inline static optional<TempFile> buffers;
-		inline static optional<TempFile> accessors;
-		inline static optional<TempFile> materials;
-		inline static optional<TempFile> binData;
-
-		static void Prepare(const string& target_file)
-		{
-			Cleanup();
-			const auto target = filesystem::path(target_file);
-			directory = target.parent_path() / (target.stem().string() + ".gltf_tmp");
-		}
-
-		static void Cleanup() noexcept
-		{
-			materials.reset();
-			accessors.reset();
-			buffers.reset();
-			meshes.reset();
-			binData.reset();
-			directory.clear();
-		}
-
-		static string Meshes()
-		{
-			EnsureDirectory();
-			if (!meshes.has_value())
-				meshes.emplace(directory, "meshes.gltf");
-			return meshes->path().string();
-		}
-
-		static string Buffers()
-		{
-			EnsureDirectory();
-			if (!buffers.has_value())
-				buffers.emplace(directory, "buffers.gltf");
-			return buffers->path().string();
-		}
-
-		static string Accessors()
-		{
-			EnsureDirectory();
-			if (!accessors.has_value())
-				accessors.emplace(directory, "accessors.gltf");
-			return accessors->path().string();
-		}
-
-		static string Materials()
-		{
-			EnsureDirectory();
-			if (!materials.has_value())
-				materials.emplace(directory, "materials.gltf");
-			return materials->path().string();
-		}
-
-		static string BinData()
-		{
-			EnsureDirectory();
-			if (!binData.has_value())
-				binData.emplace(directory, "data.bin");
-			return binData->path().string();
-		}
-
-	private:
-		static void EnsureDirectory()
-		{
-			if (directory.empty())
-				throw runtime_error("GLTF staging directory is not initialized");
-		}
-	};
 
 	// Hierarchy section - writes the "nodes" array of the JSON.
 	struct Hierarchy
@@ -271,13 +197,13 @@ namespace gltf
 		inline static size_t lastNodeIndex = static_cast<size_t>(-1);
 		inline static bool firstPrimitive = true;
 
-		static void OpenFile()
+		static void OpenFile(const filesystem::path& path)
 		{
 			meshCount = 0;
 			accessorBase = 0;
 			lastNodeIndex = static_cast<size_t>(-1);
 			firstPrimitive = true;
-			write.set(TempFiles::Meshes());
+			write.set(path.string());
 		}
 
 		static void WriteHeader()
@@ -340,11 +266,11 @@ namespace gltf
 		inline static size_t count = 0;
 		inline static size_t byteOffset = 0;
 
-		static void OpenFile()
+		static void OpenFile(const filesystem::path& path)
 		{
 			count = 0;
 			byteOffset = 0;
-			write.set(TempFiles::Buffers());
+			write.set(path.string());
 		}
 
 		static void WriteHeader()
@@ -394,10 +320,10 @@ namespace gltf
 		inline static WriteBuffer write;
 		inline static size_t count = 0;
 
-		static void OpenFile()
+		static void OpenFile(const filesystem::path& path)
 		{
 			count = 0;
-			write.set(TempFiles::Accessors());
+			write.set(path.string());
 		}
 
 		static void WriteHeader()
@@ -457,10 +383,10 @@ namespace gltf
 		inline static WriteBuffer write;
 		inline static size_t count = 0;
 
-		static void OpenFile()
+		static void OpenFile(const filesystem::path& path)
 		{
 			count = 0;
-			write.set(TempFiles::Materials());
+			write.set(path.string());
 		}
 
 		static void WriteHeader()
@@ -521,10 +447,10 @@ namespace gltf
 		inline static WriteBuffer bin;
 		inline static size_t totalBytes = 0;
 
-		static void OpenFile()
+		static void OpenFile(const filesystem::path& path)
 		{
 			totalBytes = 0;
-			bin.set(TempFiles::BinData());
+			bin.set(path.string());
 		}
 
 		static void Append(const ciff::normal_processing::RenderGeometry& mesh,
@@ -574,20 +500,9 @@ namespace gltf
 			totalBytes += nbuf.size() * sizeof(float);
 		}
 
-		static void Finalize(const string& binPath)
+		static void Finalize()
 		{
 			bin.close();
-			// Rename staging bin into target sidecar
-			std::error_code ec;
-			std::filesystem::remove(binPath, ec);
-			std::filesystem::rename(bin.getFile(), binPath, ec);
-			if (ec)
-			{
-				// fallback: copy then remove
-				std::filesystem::copy_file(bin.getFile(), binPath,
-					std::filesystem::copy_options::overwrite_existing, ec);
-				std::filesystem::remove(bin.getFile(), ec);
-			}
 		}
 	};
 
@@ -597,18 +512,61 @@ namespace gltf
 		{
 		}
 
+		~Convert() override
+		{
+			const auto closeSilently = [](WriteBuffer& stream) noexcept
+			{
+				try
+				{
+					stream.close();
+				}
+				catch (...)
+				{
+				}
+			};
+
+			closeSilently(write);
+			closeSilently(MeshTable::write);
+			closeSilently(BufferViews::write);
+			closeSilently(Accessors::write);
+			closeSilently(Materials::write);
+			closeSilently(BinWriter::bin);
+		}
+
+		bool SetFile() override
+		{
+			if (write.good())
+				return false;
+
+			source_file = data.source_cad;
+			target_file = data.target_cad;
+			if (data.nodes.empty())
+			{
+				write.set(target_file);
+				return true;
+			}
+			workspace.emplace(filesystem::path(target_file));
+			write.set(workspace->result().string());
+			return true;
+		}
+
 		void WriteHeader() override
 		{
-			TempFiles::Prepare(target_file);
+			if (!workspace)
+				throw logic_error("GLTF conversion workspace is missing");
+
+			const auto target = filesystem::path(target_file);
+			const auto binName = target.stem().string() + ".bin";
+			stagedBin = workspace->file(binName);
 
 			Hierarchy::Reset();
 			Hierarchy::ConnectParentChildren(data);
 
-			MeshTable::OpenFile();
-			BufferViews::OpenFile();
-			Accessors::OpenFile();
-			Materials::OpenFile();
-			BinWriter::OpenFile();
+			MeshTable::OpenFile(workspace->file("scratch/meshes.gltf"));
+			BufferViews::OpenFile(workspace->file("scratch/buffers.gltf"));
+			Accessors::OpenFile(workspace->file("scratch/accessors.gltf"));
+			Materials::OpenFile(workspace->file("scratch/materials.gltf"));
+			BinWriter::OpenFile(stagedBin);
 
 			MeshTable::WriteHeader();
 			BufferViews::WriteHeader();
@@ -670,17 +628,21 @@ namespace gltf
 			// buffers section pointing to sidecar .bin
 			const auto target = std::filesystem::path(target_file);
 			const auto binName = target.stem().string() + ".bin";
-			const auto binPath = (target.parent_path() / binName).string();
 
-			BinWriter::Finalize(binPath);
+			BinWriter::Finalize();
 			Buffer::Write(*this, BinWriter::totalBytes, binName);
 
 			gltf::write(write, "\n}\n");
 
-			TempFiles::Cleanup();
+			write.close();
+			if (WriteBuffer::enabled)
+				workspace->publish({ stagedBin });
+			workspace.reset();
 		}
 
 	private:
+		optional<conversion::Workspace> workspace;
+		filesystem::path stagedBin;
 		std::vector<size_t> nodeMeshIndex;
 	};
 

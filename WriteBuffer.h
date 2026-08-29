@@ -76,10 +76,19 @@ struct WriteBuffer
 
 	void close()
 	{
-		if (enabled)
-			flush();
-		else
-			position = 0;
+		try
+		{
+			if (enabled)
+				flush();
+			else
+				position = 0;
+		}
+		catch (...)
+		{
+			if (!path.empty() && stream.is_open())
+				stream.close();
+			throw;
+		}
 
 		// Only close streams we opened ourselves (via path)
 		// Moved-in streams are caller's responsibility

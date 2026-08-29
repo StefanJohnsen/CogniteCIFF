@@ -155,6 +155,7 @@
     <ClInclude Include="Constants.h" />
     <ClInclude Include="Convert.h" />
     <ClInclude Include="ConvertAsync.h" />
+    <ClInclude Include="ConversionOutput.h" />
     <ClInclude Include="ConvertCIFF.h" />
     <ClInclude Include="ConvertDAT.h" />
     <ClInclude Include="ConvertFBX.h" />
@@ -177,7 +178,6 @@
     <ClInclude Include="ReadCIFF.h" />
     <ClInclude Include="StreamCIFF.h" />
     <ClInclude Include="StreamFile.h" />
-    <ClInclude Include="TempFile.h" />
     <ClInclude Include="Util.h" />
     <ClInclude Include="WriteBuffer.h" />
     <ClInclude Include="Zlib.h" />

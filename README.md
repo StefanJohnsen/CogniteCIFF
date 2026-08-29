@@ -49,7 +49,7 @@ Files map one-to-one to their counterparts in `AutodeskFBX`:
 | `Convert.h` (`fbx::`)  | `Convert.h` (`ciff::`) |
 
 All other utility files (`CmdArgs.h`, `CmdBar.h`, `CmdTimer.h`,
-`WriteBuffer.h`, `StreamFile.h`, `Util.h`, `Constants.h`, `TempFile.h`)
+`WriteBuffer.h`, `StreamFile.h`, `Util.h`, `Constants.h`, `ConversionOutput.h`)
 are copied verbatim from `AutodeskFBX`.
 
 ## Notes
