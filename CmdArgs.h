@@ -105,7 +105,7 @@ namespace cmd
 			s += "\nUsage: <source_file_or_directory> [target_file_or_directory] [options]\n\n";
 			s += "Options:\n\n";
 			s += "  -async        Run conversion in parallel worker threads\n";
-			s += "                Currently supported only for ciff target format\n";
+			s += "                Currently supported only for ciff and obj target formats\n";
 			s += "  -help         Show this help message\n";
 			s += "  -version      Version\n";
 			s += "  -bar          Show progress bar\n";

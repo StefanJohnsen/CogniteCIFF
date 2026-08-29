@@ -106,9 +106,9 @@ static bool evaluateArg()
 			? "." + cmd::defaultTargetExt()
 			: cmd::tolower(cmd::target.extension().string());
 
-		if (asyncTargetExtension != ".ciff")
+		if (asyncTargetExtension != ".ciff" && asyncTargetExtension != ".obj")
 		{
-			cmd::err("Async conversion is only supported for ciff target format.");
+			cmd::err("Async conversion is only supported for ciff and obj target formats.");
 			return false;
 		}
 	}
