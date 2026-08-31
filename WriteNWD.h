@@ -379,18 +379,18 @@ namespace nwd::write
         {
             auto capacity = std::max<size_t>(64U, decoded.size() + decoded.size() / 8U + 64U);
             auto encoded = Bytes(capacity);
-            auto context = zlib::DeflateContext{};
+            auto context = ::ciff::zlib::DeflateContext{};
 
             for (;;)
             {
-                const auto result = zlib::deflate(context, encoded.data(), encoded.size(),
+                const auto result = ::ciff::zlib::deflate(context, encoded.data(), encoded.size(),
                                                         decoded.data(), decoded.size());
                 if (result >= 0)
                 {
                     encoded.resize(static_cast<size_t>(result));
                     return encoded;
                 }
-                if (result != zlib::deflate_error::destination_too_small)
+                if (result != ::ciff::zlib::deflate_error::destination_too_small)
                     throw std::runtime_error(std::string("Unable to compress ") + label);
                 if (encoded.size() > encoded.max_size() / 2U)
                     throw std::overflow_error(std::string(label) + " compressed output is too large");
@@ -400,7 +400,7 @@ namespace nwd::write
 
         [[nodiscard]] inline const char* inflateErrorName(const ptrdiff_t status) noexcept
         {
-            using namespace zlib::inflate_error;
+            using namespace ::ciff::zlib::inflate_error;
 
             switch (status)
             {
@@ -447,7 +447,7 @@ namespace nwd::write
             if (maximumDecodedSize == 0U)
                 throw std::runtime_error("Invalid maximum NWD inflate size");
 
-            auto context = zlib::InflateContext{};
+            auto context = ::ciff::zlib::InflateContext{};
             auto destination = Bytes{};
             const auto initialGuess = std::max<size_t>(
                 1U, std::min(maximumDecodedSize,
@@ -459,7 +459,7 @@ namespace nwd::write
             for (;;)
             {
                 destination.resize(capacity);
-                const auto status = zlib::inflateActualSize(
+                const auto status = ::ciff::zlib::inflateActualSize(
                     context, destination.data(), destination.size(), source.data(), source.size());
                 if (status >= 0)
                 {
@@ -468,7 +468,7 @@ namespace nwd::write
                     destination.resize(static_cast<size_t>(status));
                     return destination;
                 }
-                if (status == zlib::inflate_error::output_overrun)
+                if (status == ::ciff::zlib::inflate_error::output_overrun)
                 {
                     if (capacity == maximumDecodedSize)
                     {
@@ -638,7 +638,7 @@ namespace nwd::write
                 for (size_t child = 0U; child < range.count; ++child)
                     writeNode(writer, levels, level - 1U, range.first + child, fragments);
             }
-        } // namespace spatial_detail
+        }
 
         [[nodiscard]] inline Bytes makeSpatialHierarchy(
             const std::span<const SpatialFragmentBounds> bounds)
@@ -2054,7 +2054,7 @@ namespace nwd::write
             }
             return result;
         }
-    } // namespace detail
+    }
 
     [[nodiscard]] inline Bytes makeSemantic(const Scene& scene)
     {
@@ -2235,11 +2235,11 @@ namespace nwd::write
         if (!parent.empty() && (!std::filesystem::is_directory(parent, error) || error))
             throw std::runtime_error("NWD target directory does not exist: " + parent.string());
         const auto container = makeSemantic(scene);
-        auto temporary = conversion::AtomicFile::create(target);
+        auto temporary = ciff::conversion::AtomicFile::create(target);
         temporary.write(container);
         temporary.publish();
     }
-} // namespace nwd::write
+}
 
 #ifdef FALCON_NWD_WRITE_RESTORE_MAX_MACRO
 #pragma pop_macro("max")

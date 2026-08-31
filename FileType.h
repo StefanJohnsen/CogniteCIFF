@@ -6,6 +6,8 @@
 
 #include "Util.h"
 
+namespace ciff
+{
 enum fileType : uint8_t
 {
 	UnknownCAD = 0,
@@ -17,13 +19,13 @@ enum fileType : uint8_t
 	KhronosGLTF,
 	HierarchyTXT,
 	HierarchyJSON,
-	GeometryData,
+	GeometryDAT,
 	NavisworksNWD
 };
 
 inline fileType sourceType(const std::string& file)
 {
-	const auto ext = ::tolower(fileExtension(file));
+	const auto ext = util::tolower(util::fileExtension(file));
 
 	if (ext == ".ciff")
 		return CogniteCIFF;
@@ -33,7 +35,7 @@ inline fileType sourceType(const std::string& file)
 
 inline fileType targetType(const std::string& file)
 {
-	const auto ext = ::tolower(fileExtension(file));
+	const auto ext = util::tolower(util::fileExtension(file));
 
 	if (ext == ".ciff")
 		return CogniteCIFF;
@@ -60,7 +62,7 @@ inline fileType targetType(const std::string& file)
 		return HierarchyJSON;
 
 	if (ext == ".dat")
-		return GeometryData;
+		return GeometryDAT;
 	if (ext == ".nwd")
 		return NavisworksNWD;
 
@@ -86,11 +88,12 @@ inline std::string mode(const std::string& file, const bool source)
 	case KhronosGLTF:
 	case HierarchyTXT:
 	case HierarchyJSON:
-	case GeometryData:
+	case GeometryDAT:
 		return source ? "r" : "w";
 	case UnknownCAD:
 		return {};
 	default:
 		throw std::runtime_error("Unknown CAD type");
 	}
+}
 }

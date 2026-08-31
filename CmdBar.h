@@ -22,7 +22,7 @@
 #include <unistd.h>
 #endif
 
-namespace bar
+namespace ciff::bar
 {
 	bool noConsoleWindow();
 

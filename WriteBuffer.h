@@ -10,6 +10,8 @@
 
 #include "Constants.h"
 
+namespace ciff
+{
 inline constexpr size_t WRITE_BUFFER_SIZE = 100ULL * 1024 * 1024; // 100MB
 
 struct WriteBuffer
@@ -525,3 +527,4 @@ public:
 
 	inline static bool enabled = true;
 };
+}

@@ -93,7 +93,7 @@ namespace ciff
 
             return std::min({t0, t1, t2});
         }
-    } // namespace
+    }
 
     bool Cell::operator==(const Cell& other) const noexcept
     {
@@ -515,4 +515,4 @@ namespace ciff
         clearVertexLookup();
         invalidateShapeHash();
     }
-} // namespace ciff
+}

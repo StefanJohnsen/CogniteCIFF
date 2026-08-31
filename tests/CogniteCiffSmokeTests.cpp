@@ -72,10 +72,11 @@ namespace
         scene::SetHidden(sceneFlags, false);
         Check(!scene::IsHidden(sceneFlags), "SceneData hidden flag was not cleared");
 
-        auto binaryFlags = f3d::MakeNodeFlags(f3d::NodeType::Insulation);
-        f3d::SetHidden(binaryFlags, true);
-        Check(f3d::HasValidNodeFlags(binaryFlags) && f3d::IsHidden(binaryFlags) &&
-                  f3d::GetNodeType(binaryFlags) == f3d::NodeType::Insulation && !f3d::HasValidNodeFlags(0x03U),
+        auto binaryFlags = ciff::f3d::MakeNodeFlags(ciff::f3d::NodeType::Insulation);
+        ciff::f3d::SetHidden(binaryFlags, true);
+        Check(ciff::f3d::HasValidNodeFlags(binaryFlags) && ciff::f3d::IsHidden(binaryFlags) &&
+                  ciff::f3d::GetNodeType(binaryFlags) == ciff::f3d::NodeType::Insulation &&
+                  !ciff::f3d::HasValidNodeFlags(0x03U),
               "Falcon3D node flag contract is incorrect");
     }
 
@@ -283,7 +284,7 @@ namespace
     int RunBenchmark(const std::filesystem::path& ciffPath)
     {
         scene::SceneData sceneData;
-        const auto conversion = cifflib::ConvertToScene(ciffPath, sceneData);
+        const auto conversion = ciff::ConvertToScene(ciffPath, sceneData);
         if (!conversion.success)
         {
             std::wcerr << L"CIFF benchmark failed: " << conversion.message << std::endl;
@@ -386,7 +387,7 @@ namespace
         Check(node.name == "Root", "Root name was not preserved");
     }
 
-    void ValidateTimings(const cifflib::ConvertToSceneResult& conversion)
+    void ValidateTimings(const ciff::ConvertToSceneResult& conversion)
     {
         const auto& timings = conversion.timings;
         const std::array values{
@@ -425,7 +426,7 @@ namespace
         sentinel.meshes.back().shapeHash = 0x123456789abcdef0ULL;
 
         std::size_t callbackCount = 0U;
-        const auto conversion = cifflib::ConvertToScene(
+        const auto conversion = ciff::ConvertToScene(
             ciffPath,
             sentinel,
             [&](const std::size_t total, const std::size_t current)
@@ -463,7 +464,7 @@ namespace
     void ValidateSharedMeshInstances(const std::filesystem::path& ciffPath)
     {
         scene::SceneData sceneData;
-        const auto conversion = cifflib::ConvertToScene(ciffPath, sceneData);
+        const auto conversion = ciff::ConvertToScene(ciffPath, sceneData);
         Check(conversion.success, "ConvertToScene failed for the shared-mesh CIFF fixture");
         Check(sceneData.geometryChunks.size() == 1U && sceneData.meshes.size() == 1U,
               "Identical CIFF meshes were not shared as one sealed form");
@@ -591,7 +592,7 @@ namespace
     {
         ciff::Read parsed(ciffPath.string(), outputPath.string());
         parsed.load();
-        Check(f3d::convert(parsed), "f3d::convert failed for the minimal CIFF fixture");
+        Check(ciff::f3d::convert(parsed), "f3d::convert failed for the minimal CIFF fixture");
         Check(std::filesystem::is_regular_file(outputPath), "f3d::convert did not create its output file");
 
         const BinaryReader file(outputPath);
@@ -667,8 +668,9 @@ namespace
                   file.read<std::uint64_t>(node + 8U) == 1U,
               "Serialized root instance range is incorrect");
         const auto nodeFlags = file.read<std::uint8_t>(node + 16U);
-        Check(f3d::HasValidNodeFlags(nodeFlags) && f3d::GetNodeType(nodeFlags) == f3d::NodeType::Node &&
-                  !f3d::IsHidden(nodeFlags),
+        Check(ciff::f3d::HasValidNodeFlags(nodeFlags) &&
+                  ciff::f3d::GetNodeType(nodeFlags) == ciff::f3d::NodeType::Node &&
+                  !ciff::f3d::IsHidden(nodeFlags),
               "Serialized root node flags are incorrect");
         Check(file.readString(node + 17U) == "Root", "Serialized root name is incorrect");
 
@@ -697,7 +699,7 @@ int main(const int argc, char* argv[])
         WriteMinimalCiff(sharedCiffPath, 2U);
 
         scene::SceneData sceneData;
-        const auto conversion = cifflib::ConvertToScene(ciffPath, sceneData);
+        const auto conversion = ciff::ConvertToScene(ciffPath, sceneData);
         Check(conversion.success, "ConvertToScene failed for the minimal CIFF fixture");
         ValidateTimings(conversion);
         ValidateScene(sceneData);

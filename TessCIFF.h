@@ -596,6 +596,6 @@ namespace ciff
 
 			return mesh;
 		}
-	} // namespace tess
-} // namespace ciff
+	}
+}
 

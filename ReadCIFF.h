@@ -613,4 +613,4 @@ namespace ciff
                 (void)stream.readString(); // texture metadata (best effort)
         }
     };
-} // namespace ciff
+}

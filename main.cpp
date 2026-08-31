@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 
+#include "CadCast.h"
 #include "CmdArgs.h"
 #include "CmdBar.h"
 #include "CmdTimer.h"
@@ -20,6 +21,13 @@
 #include "ConvertNWD.h"
 
 #include "WriteStatistics.h"
+
+namespace cmd = ciff::cmd;
+namespace bar = ciff::bar;
+namespace statistics = ciff::statistics;
+using ciff::CogniteCIFF;
+using ciff::sourceType;
+using ciff::targetType;
 
 static std::vector<std::filesystem::path> enumAllFilesInDirectory(const std::filesystem::path& directory)
 {
@@ -47,43 +55,7 @@ static bool convert(const std::string& source_cad, const std::string& target_cad
 	ciff::Read data(source_cad, target_cad);
 	data.load();
 
-	bool result = false;
-
-	switch (targetType(target_cad))
-	{
-	case CogniteCIFF:
-		result = ciff::convert(data);
-		break;
-	case AutodeskFBX:
-		result = fbx::convert(data);
-		break;
-	case AvevaRVM:
-		result = rvm::convert(data);
-		break;
-	case Falcon3D:
-		result = f3d::convert(data);
-		break;
-	case WavefrontOBJ:
-		result = obj::convert(data);
-		break;
-	case KhronosGLTF:
-		result = gltf::convert(data);
-		break;
-	case HierarchyTXT:
-		result = text::convert(data);
-		break;
-	case HierarchyJSON:
-		result = json::convert(data);
-		break;
-	case GeometryData:
-		result = data::convert(data);
-		break;
-	case NavisworksNWD:
-		result = nwd::convert(data);
-		break;
-	default:
-		throw std::logic_error("Unsupported target type");
-	}
+	const bool result = ciff::ConvertToFile(targetType(target_cad), data);
 
 	statistics::print(data);
 	return result;
@@ -97,7 +69,7 @@ static bool evaluateArg()
 	{
 		cmd::bar = false;
 		cmd::statistics = false;
-		WriteBuffer::enabled = false;
+		ciff::WriteBuffer::enabled = false;
 	}
 
 	if (cmd::async)

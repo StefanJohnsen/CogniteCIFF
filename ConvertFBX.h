@@ -39,7 +39,7 @@
 #include "ProcessCIFF.h"
 #include "WriteBuffer.h"
 
-namespace fbx
+namespace ciff::fbx
 {
 	using namespace std;
 
@@ -774,4 +774,4 @@ namespace fbx
 	{
 		return Convert(data).run();
 	}
-} // namespace fbxexport
+}

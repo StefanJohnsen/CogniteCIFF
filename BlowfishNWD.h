@@ -363,4 +363,4 @@ namespace nwd::blowfish
         }
         return true;
     }
-} // namespace nwd::blowfish
+}

@@ -30,7 +30,7 @@
 #include <memory>
 #include <vector>
 
-namespace zlib
+namespace ciff::zlib
 {
     struct InflateContext;
 
@@ -52,7 +52,7 @@ namespace zlib
         inline constexpr ptrdiff_t output_underrun = -14;
         inline constexpr ptrdiff_t checksum_mismatch = -15;
         inline constexpr ptrdiff_t trailing_garbage = -16;
-    } // namespace inflate_error
+    }
 
     namespace config
     {
@@ -80,7 +80,7 @@ namespace zlib
         inline constexpr uint8_t FIXED_LITLEN_BITS_256_279 = 7;
         inline constexpr uint8_t FIXED_LITLEN_BITS_280_287 = 8;
         inline constexpr uint8_t FIXED_DISTANCE_BITS = 5;
-    } // namespace config
+    }
 
     namespace detail
     {
@@ -1008,7 +1008,7 @@ namespace zlib
             return trees;
         }
 
-    } // namespace detail
+    }
 
     struct InflateContext
     {
@@ -1199,7 +1199,7 @@ namespace zlib
         inline constexpr ptrdiff_t destination_too_large = -103;
         inline constexpr ptrdiff_t failed_to_flush = -104;
         inline constexpr ptrdiff_t unsupported_input = -105;
-    } // namespace deflate_error
+    }
 
     namespace deflate_config
     {
@@ -1230,7 +1230,7 @@ namespace zlib
         inline constexpr uint8_t FIXED_LITLEN_BITS_256_279 = 7;
         inline constexpr uint8_t FIXED_LITLEN_BITS_280_287 = 8;
         inline constexpr uint8_t FIXED_DISTANCE_BITS = 5;
-    } // namespace deflate_config
+    }
 
     namespace deflate_detail
     {
@@ -1626,7 +1626,7 @@ namespace zlib
 
             return 0;
         }
-    } // namespace deflate_detail
+    }
 
     struct DeflateContext
     {
@@ -1688,4 +1688,4 @@ namespace zlib
         auto context = DeflateContext{};
         return deflate(context, dst, dstSize, src, srcSize);
     }
-} // namespace zlib
+}

@@ -292,7 +292,7 @@ namespace
     class ResidualSceneWorkTimer
     {
       public:
-        explicit ResidualSceneWorkTimer(cifflib::ConvertToSceneTimings& timings) noexcept
+        explicit ResidualSceneWorkTimer(ciff::ConvertToSceneTimings& timings) noexcept
             : timings_(timings), geometryBefore_(timings.geometryFinalizeMs),
               descriptorBefore_(timings.meshDescriptorMs), start_(TimingClock::now())
         {
@@ -310,7 +310,7 @@ namespace
         ResidualSceneWorkTimer& operator=(const ResidualSceneWorkTimer&) = delete;
 
       private:
-        cifflib::ConvertToSceneTimings& timings_;
+        ciff::ConvertToSceneTimings& timings_;
         double geometryBefore_;
         double descriptorBefore_;
         TimingClock::time_point start_;
@@ -551,8 +551,8 @@ namespace
 
     struct SceneConvert final : ciff::Convert
     {
-        SceneConvert(ciff::Read& data, scene::SceneData& out, const cifflib::ConvertProgressCallback& cb,
-                     cifflib::ConvertToSceneTimings& convertTimings)
+        SceneConvert(ciff::Read& data, scene::SceneData& out, const ciff::ConvertProgressCallback& cb,
+                     ciff::ConvertToSceneTimings& convertTimings)
             : ciff::Convert(data), sd(out), callback(cb), timings(convertTimings)
         {
         }
@@ -1128,8 +1128,8 @@ namespace
         }
 
         scene::SceneData& sd;
-        const cifflib::ConvertProgressCallback& callback;
-        cifflib::ConvertToSceneTimings& timings;
+        const ciff::ConvertProgressCallback& callback;
+        ciff::ConvertToSceneTimings& timings;
         std::vector<SealingTask> sealingTasks;
         std::vector<std::uint32_t> uniqueSealingTaskIndices;
         std::vector<PendingOccurrence> pendingOccurrences;
@@ -1139,9 +1139,9 @@ namespace
         ciff::primitive_stats::Stats primitiveStats;
         std::size_t processedGeometryCount = 0U;
     };
-} // namespace
+}
 
-namespace cifflib
+namespace ciff
 {
     ConvertToSceneResult ConvertToScene(const std::filesystem::path& ciffPath, scene::SceneData& out,
                                         const ConvertProgressCallback& progressCallback)
@@ -1216,4 +1216,4 @@ namespace cifflib
             return finish();
         }
     }
-} // namespace cifflib
+}

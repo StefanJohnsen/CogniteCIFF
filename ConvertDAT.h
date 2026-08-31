@@ -5,7 +5,7 @@
 #include "Convert.h"
 #include "ProcessCIFF.h"
 
-namespace data
+namespace ciff::data
 {
 	// Raw geometry dump:
 	//   uint32 nodeCount
@@ -59,4 +59,4 @@ namespace data
 	{
 		return Convert(data).run();
 	}
-} // namespace data
+}

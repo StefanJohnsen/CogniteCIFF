@@ -39,7 +39,7 @@
 #include "Util.h"
 #include "WriteBuffer.h"
 
-namespace f3d
+namespace ciff::f3d
 {
     using Matrix3x4 = std::array<float, 12>;
 
@@ -1288,4 +1288,4 @@ namespace f3d
             return false;
         return Convert(data).run();
     }
-} // namespace f3d
+}

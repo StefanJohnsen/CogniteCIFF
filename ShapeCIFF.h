@@ -348,5 +348,5 @@ namespace ciff
 
 			return h;
 		}
-	} // namespace shape
-} // namespace ciff
+	}
+}

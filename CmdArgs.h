@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace cmd
+namespace ciff::cmd
 {
 	enum class Msg
 	{

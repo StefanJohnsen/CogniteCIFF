@@ -29,7 +29,7 @@
 #include <unistd.h>
 #endif
 
-namespace conversion
+namespace ciff::conversion
 {
     namespace detail
     {
@@ -133,7 +133,7 @@ namespace conversion
             return left == right;
 #endif
         }
-    } // namespace detail
+    }
 
     class AtomicFile final
     {
@@ -673,4 +673,4 @@ namespace conversion
         std::vector<std::filesystem::path> parts_;
         bool remove_ = true;
     };
-} // namespace conversion
+}

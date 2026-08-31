@@ -318,7 +318,7 @@ namespace ciff::clone
 	{
 		return cmd::async ? ConvertAsync<Convert>(data).run() : Convert(data).run();
 	}
-} // namespace ciff::clone
+}
 
 namespace ciff
 {

@@ -165,4 +165,4 @@ namespace ciff
 		WriteBuffer write;
 		size_t nodeIndex = 0;
 	};
-} // namespace ciff
+}

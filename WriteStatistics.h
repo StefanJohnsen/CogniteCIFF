@@ -7,7 +7,7 @@
 #include "CmdArgs.h"
 #include "ReadCIFF.h"
 
-namespace statistics
+namespace ciff::statistics
 {
 	inline std::string formatWithDots(const size_t num)
 	{
@@ -92,4 +92,4 @@ namespace statistics
 		print("Total colors parsed", formatWithDots(data.colors.size()));
 		printSeparator();
 	}
-} // namespace statistics
+}

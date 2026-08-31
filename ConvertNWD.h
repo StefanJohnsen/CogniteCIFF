@@ -12,7 +12,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace nwd
+namespace ciff::nwd
 {
     struct Convert final : ciff::Convert
     {
@@ -64,7 +64,7 @@ namespace nwd
         void WriteNode(const ciff::Node& node) override
         {
             const auto noParent = (std::numeric_limits<size_t>::max)();
-            scene_.nodes.push_back(nwd::write::Node{
+            scene_.nodes.push_back(::nwd::write::Node{
                 .name = node.name, .parent = node.parentIndex == nodeIndex ? noParent : node.parentIndex});
         }
         void WriteGeometry(const ciff::Node&, const size_t geometryIndex) override
@@ -76,7 +76,7 @@ namespace nwd
             if (mesh.positions.size() % 3U != 0U || mesh.normals.size() != mesh.positions.size() ||
                 mesh.indices.size() % 3U != 0U)
                 throw std::runtime_error("CIFF final mesh has incomplete triangle geometry");
-            auto output = nwd::write::Mesh{};
+            auto output = ::nwd::write::Mesh{};
             const auto points = mesh.positions.size() / 3U;
             output.vertices.reserve(points);
             output.normals.reserve(points);
@@ -90,7 +90,7 @@ namespace nwd
             const auto meshIndex = scene_.meshes.size();
             scene_.meshes.push_back(std::move(output));
             const auto appearanceIndex = appearance(source.color);
-            scene_.instances.push_back(nwd::write::Instance{.mesh = meshIndex,
+            scene_.instances.push_back(::nwd::write::Instance{.mesh = meshIndex,
                                                             .node = nodeIndex,
                                                             .appearance = appearanceIndex,
                                                             .transparent = data.colors.at(source.color).a < 255U});
@@ -101,9 +101,9 @@ namespace nwd
         void WriteFooter() override
         {
             if (WriteBuffer::enabled)
-                nwd::write::writeSemantic(std::filesystem::path{target_file}, scene_);
+                ::nwd::write::writeSemantic(std::filesystem::path{target_file}, scene_);
             else
-                static_cast<void>(nwd::write::makeSemantic(scene_));
+                static_cast<void>(::nwd::write::makeSemantic(scene_));
         }
 
       private:
@@ -112,7 +112,7 @@ namespace nwd
             if (const auto found = appearances_.find(colorIndex); found != appearances_.end())
                 return found->second;
             const auto& c = data.colors.at(colorIndex);
-            auto value = nwd::write::Appearance{};
+            auto value = ::nwd::write::Appearance{};
             value.material.diffuse = {c.r / 255.0F, c.g / 255.0F, c.b / 255.0F};
             value.material.shininess = 0.2F;
             value.material.transparency = 1.0F - c.a / 255.0F;
@@ -121,11 +121,11 @@ namespace nwd
             appearances_.emplace(colorIndex, index);
             return index;
         }
-        nwd::write::Scene scene_;
+        ::nwd::write::Scene scene_;
         std::unordered_map<size_t, uint32_t> appearances_;
     };
     inline bool convert(ciff::Read& data)
     {
         return Convert(data).run();
     }
-} // namespace nwd
+}

@@ -5,7 +5,7 @@
 
 #include "Convert.h"
 
-namespace json
+namespace ciff::json
 {
 	struct Convert final : ciff::Convert
 	{
@@ -57,4 +57,4 @@ namespace json
 	{
 		return Convert(data).run();
 	}
-} // namespace json
+}

@@ -59,4 +59,4 @@ namespace ciff
 		mesh.color = geometry.color;
 		return mesh;
 	}
-} // namespace ciff
+}

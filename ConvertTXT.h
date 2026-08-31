@@ -6,7 +6,7 @@
 
 #include "Convert.h"
 
-namespace text
+namespace ciff::text
 {
 	struct Convert final : ciff::Convert
 	{
@@ -48,4 +48,4 @@ namespace text
 	{
 		return Convert(data).run();
 	}
-} // namespace text
+}

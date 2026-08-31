@@ -29,7 +29,7 @@
 #include "ProcessCIFF.h"
 #include "Util.h"
 
-namespace rvm
+namespace ciff::rvm
 {
 	using namespace std;
 
@@ -262,7 +262,7 @@ namespace rvm
 			rvm::write(write, Version);
 			rvm::write(write, Info);
 			rvm::write(write, Note);
-			rvm::write(write, current_date_time());
+			rvm::write(write, util::current_date_time());
 			rvm::write(write, User);
 			rvm::write(write, Code);
 
@@ -429,7 +429,7 @@ namespace rvm
 		{
 			openNodes.clear();
 			Head::Write(write);
-			Model::Write(write, data.nodes.empty() ? fileStem(source_file) : data.nodes.front().name);
+			Model::Write(write, data.nodes.empty() ? util::fileStem(source_file) : data.nodes.front().name);
 			Palette::Write(write, data.colors);
 		}
 
@@ -500,4 +500,4 @@ namespace rvm
 	{
 		return Convert(data).run();
 	}
-} // namespace rvm
+}

@@ -80,14 +80,15 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClCompile Include="ConvertToFile.cpp">
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <ClCompile Include="ConvertToScene.cpp" />
     <ClCompile Include="..\PrimitivesCIFF.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ConvertToFile.h" />
     <ClInclude Include="ConvertToScene.h" />
-    <ClInclude Include="..\MeshNormals.h" />
-    <ClInclude Include="..\PrimitiveInstanceCIFF.h" />
-    <ClInclude Include="..\PrimitiveStatsCIFF.h" />
     <ClInclude Include="SceneData.h" />
   </ItemGroup>
 

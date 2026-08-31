@@ -161,8 +161,8 @@ namespace ciff
 
 			std::cerr << "unknown error" << std::endl;
 		}
-	} // namespace async_detail
-} // namespace ciff
+	}
+}
 
 template <typename Converter>
 struct ConvertAsync final
@@ -215,9 +215,9 @@ private:
 			return Converter(data_).run();
 
 		const auto chunkSize = (total + workerCount - 1U) / workerCount;
-		const bool outputEnabled = WriteBuffer::enabled;
+		const bool outputEnabled = ciff::WriteBuffer::enabled;
 		auto staging = outputEnabled
-			? std::make_unique<conversion::Workspace>(std::filesystem::path(data_.target_cad), workerCount)
+			? std::make_unique<ciff::conversion::Workspace>(std::filesystem::path(data_.target_cad), workerCount)
 			: nullptr;
 
 		Converter convert(data_);

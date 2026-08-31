@@ -25,6 +25,9 @@
     <ClInclude Include="CmdBar.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="CadCast.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
     <ClInclude Include="CmdTimer.h">
       <Filter>Source Files</Filter>
     </ClInclude>

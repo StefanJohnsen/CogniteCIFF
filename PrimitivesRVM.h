@@ -22,7 +22,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace rvm
+namespace ciff::rvm
 {
 	struct Point
 	{
@@ -209,4 +209,4 @@ namespace rvm
 
 		Type type() override { return Type::FacetGroup; }
 	};
-} // namespace rvm
+}

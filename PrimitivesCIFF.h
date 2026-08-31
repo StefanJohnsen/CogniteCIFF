@@ -465,4 +465,4 @@ struct Cell
 		size_t color = 0;
 		std::vector<size_t> geometries; // indices into Read::geometries
 	};
-} // namespace ciff
+}

@@ -17,7 +17,7 @@
 
 namespace scene { struct SceneData; }
 
-namespace cifflib
+namespace ciff
 {
     // CPU wall-clock timings for the eager CIFF -> SceneData producer. The
     // three detailed SceneData stages are non-overlapping; projection and total
@@ -53,4 +53,4 @@ namespace cifflib
         scene::SceneData&               out,
         const ConvertProgressCallback&  progressCallback = {});
 
-} // namespace cifflib
+}

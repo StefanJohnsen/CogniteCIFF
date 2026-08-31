@@ -8,6 +8,8 @@
 #include <sstream>
 #include <string>
 
+namespace ciff::util
+{
 inline std::string tolower(std::string text)
 {
 	std::transform(text.begin(), text.end(), text.begin(),
@@ -43,4 +45,5 @@ inline std::string current_date_time()
 	std::ostringstream text;
 	text << std::put_time(&local, "%Y-%m-%d %H:%M:%S");
 	return text.str();
+}
 }

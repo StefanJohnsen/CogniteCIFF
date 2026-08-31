@@ -145,4 +145,4 @@ namespace scene
         std::uint32_t rootNode = 0;
     };
 
-} // namespace scene
+}

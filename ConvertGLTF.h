@@ -35,7 +35,7 @@
 #include "Util.h"
 #include "WriteBuffer.h"
 
-namespace gltf
+namespace ciff::gltf
 {
 	using namespace std;
 
@@ -136,7 +136,7 @@ namespace gltf
 		{
 			ostringstream json_str;
 
-			const auto name = fileStem(convert.source_file);
+			const auto name = util::fileStem(convert.source_file);
 
 			json_str << ",\n";
 			json_str << R"(  "scene": 0,)" << "\n";
@@ -650,4 +650,4 @@ namespace gltf
 	{
 		return Convert(data).run();
 	}
-} // namespace gltf
+}

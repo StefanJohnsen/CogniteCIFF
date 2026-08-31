@@ -84,4 +84,4 @@ namespace ciff::binary
 	private:
 		ciff::StreamFile stream;
 	};
-} // namespace ciff::binary
+}
