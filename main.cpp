@@ -9,17 +9,6 @@
 
 #include "FileType.h"
 
-#include "ConvertCIFF.h"
-#include "ConvertDAT.h"
-#include "ConvertFBX.h"
-#include "Convert3D.h"
-#include "ConvertGLTF.h"
-#include "ConvertJSON.h"
-#include "ConvertOBJ.h"
-#include "ConvertRVM.h"
-#include "ConvertTXT.h"
-#include "ConvertNWD.h"
-
 #include "WriteStatistics.h"
 
 namespace cmd = ciff::cmd;

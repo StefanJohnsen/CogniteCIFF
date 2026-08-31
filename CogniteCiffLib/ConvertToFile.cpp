@@ -2,16 +2,6 @@
 
 #include "../CadCast.h"
 #include "../CmdArgs.h"
-#include "../Convert3D.h"
-#include "../ConvertCIFF.h"
-#include "../ConvertDAT.h"
-#include "../ConvertFBX.h"
-#include "../ConvertGLTF.h"
-#include "../ConvertJSON.h"
-#include "../ConvertNWD.h"
-#include "../ConvertOBJ.h"
-#include "../ConvertRVM.h"
-#include "../ConvertTXT.h"
 #include "../FileType.h"
 #include "../ReadCIFF.h"
 
