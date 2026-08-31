@@ -1,10 +1,12 @@
 #include "ConvertToScene.h"
 #include "SceneData.h"
 
+#if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -109,6 +111,7 @@ namespace
 
     [[nodiscard]] std::size_t GeometrySealingReservationBudgetBytes() noexcept
     {
+#if defined(_WIN32)
         MEMORYSTATUSEX memoryStatus{};
         memoryStatus.dwLength = sizeof(memoryStatus);
         if (::GlobalMemoryStatusEx(&memoryStatus) == FALSE)
@@ -131,8 +134,12 @@ namespace
         return (std::clamp)(adaptiveBudget,
                             kMinGeometrySealingReservationBudgetBytes,
                             kMaxGeometrySealingReservationBudgetBytes);
+#else
+        return kMinGeometrySealingReservationBudgetBytes;
+#endif
     }
 
+#if defined(_WIN32)
     [[nodiscard]] std::size_t ParseWindowsPhysicalCoreCount(
         const std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>& topology,
         const DWORD byteCount) noexcept
@@ -201,6 +208,7 @@ namespace
 
         return 0U;
     }
+#endif
 
     [[nodiscard]] std::size_t FallbackPhysicalCoreCount() noexcept
     {
@@ -219,7 +227,10 @@ namespace
         if (taskCount == 0U)
             return 0U;
 
-        auto physicalCores = QueryWindowsPhysicalCoreCount();
+        auto physicalCores = std::size_t{};
+#if defined(_WIN32)
+        physicalCores = QueryWindowsPhysicalCoreCount();
+#endif
         if (physicalCores == 0U)
             physicalCores = FallbackPhysicalCoreCount();
 
@@ -1212,7 +1223,9 @@ namespace ciff
         {
             const std::string what(ex.what());
             result.message.assign(what.begin(), what.end());
+#if defined(_WIN32)
             ::OutputDebugStringW((L"[CogniteCiffLib] " + result.message + L"\n").c_str());
+#endif
             return finish();
         }
     }

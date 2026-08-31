@@ -104,7 +104,7 @@ struct Cell
 
       private:
         static void validateAttributeMode(const Mesh& mesh, bool hasUV, bool hasVertexColor);
-        static [[nodiscard]] bool sameVertex(const Mesh& mesh, uint32_t index, const Point& point, const UV2* uv,
+        [[nodiscard]] static bool sameVertex(const Mesh& mesh, uint32_t index, const Point& point, const UV2* uv,
                                       const RGBA4f* vertexColor);
         void rebuild(const Mesh& mesh);
 

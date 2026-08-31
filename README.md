@@ -26,6 +26,78 @@ and a shared `Convert` base class in `Convert.h`.
 Open `CogniteCIFF.sln` in Visual Studio 2022 (toolset `v143`, C++20) and
 build the `x64` configuration of choice.
 
+### Build a Linux executable with VS Code and WSL 2
+
+These steps build the Linux version. Do not open the Visual Studio solution for
+this build.
+
+1. Open **Visual Studio Code** in Windows.
+2. Press `Ctrl+Shift+P` to open the **Command Palette**.
+3. Type `WSL: Connect to WSL using Distro...` and select it.
+   If this command is not shown, press `Ctrl+Shift+X`, install the Microsoft
+   **WSL** extension, and repeat step 2.
+4. Select **Ubuntu**. A new VS Code window opens.
+5. In the new window, press `Ctrl+Shift+P` again.
+6. Type `File: Open Folder...` and select it.
+7. Enter this folder and click **OK**:
+
+   ```text
+   /mnt/c/FalconCoding/CogniteCIFF
+   ```
+
+8. Check the lower-left corner of VS Code. It must say `WSL: Ubuntu`.
+9. On a new Ubuntu installation, select **Terminal > New Terminal** and run:
+
+   ```bash
+   sudo apt update
+   sudo apt install build-essential cmake ninja-build
+   ```
+
+   This only needs to be done once.
+10. If VS Code recommends extensions, install **C/C++** and **CMake Tools** in
+    `WSL: Ubuntu`.
+11. Press `Ctrl+Shift+P`, run `CMake: Select Configure Preset`, and select
+    **Linux Release**.
+12. Press `Ctrl+Shift+P`, run `CMake: Configure`, and wait until it completes.
+13. Press `Ctrl+Shift+P`, run `CMake: Build`, and wait until it completes.
+
+The build is successful when the CMake output ends with exit code `0`. The
+Linux executable is created here:
+
+```text
+C:\FalconCoding\CogniteCIFF\build\linux-release\CogniteCIFF
+```
+
+The same file has this path inside WSL:
+
+```text
+/mnt/c/FalconCoding/CogniteCIFF/build/linux-release/CogniteCIFF
+```
+
+The file is named `CogniteCIFF`, without `.exe`, because it is a Linux program.
+It must be run in Linux or WSL, not directly in Windows.
+
+To verify the file type, select **Terminal > New Terminal** in the WSL window
+and run:
+
+```bash
+file build/linux-release/CogniteCIFF
+```
+
+The result must begin with `ELF 64-bit`.
+
+#### Optional: build from the WSL terminal
+
+The steps above are enough. These commands perform the same build without the
+VS Code menus:
+
+```bash
+cd /mnt/c/FalconCoding/CogniteCIFF
+cmake --preset linux-release
+cmake --build --preset linux-release
+```
+
+
 ## Usage
 
 ```

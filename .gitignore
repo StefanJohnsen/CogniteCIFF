@@ -389,3 +389,4 @@ FodyWeavers.xsd
 *.sln.iml
 IvarAasen-Cellar-Deck.OBJ.mtl
 IvarAasen-Cellar-Deck.rvm
+/build/

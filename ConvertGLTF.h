@@ -191,7 +191,7 @@ namespace ciff::gltf
 	// primitive per CIFF Geometry it references.
 	struct MeshTable
 	{
-		inline static WriteBuffer write;
+		inline static WriteBuffer write{};
 		inline static size_t meshCount = 0;
 		inline static size_t accessorBase = 0;
 		inline static size_t lastNodeIndex = static_cast<size_t>(-1);
@@ -262,7 +262,7 @@ namespace ciff::gltf
 
 	struct BufferViews
 	{
-		inline static WriteBuffer write;
+		inline static WriteBuffer write{};
 		inline static size_t count = 0;
 		inline static size_t byteOffset = 0;
 
@@ -317,7 +317,7 @@ namespace ciff::gltf
 
 	struct Accessors
 	{
-		inline static WriteBuffer write;
+		inline static WriteBuffer write{};
 		inline static size_t count = 0;
 
 		static void OpenFile(const filesystem::path& path)
@@ -380,7 +380,7 @@ namespace ciff::gltf
 
 	struct Materials
 	{
-		inline static WriteBuffer write;
+		inline static WriteBuffer write{};
 		inline static size_t count = 0;
 
 		static void OpenFile(const filesystem::path& path)
@@ -444,7 +444,7 @@ namespace ciff::gltf
 
 	struct BinWriter
 	{
-		inline static WriteBuffer bin;
+		inline static WriteBuffer bin{};
 		inline static size_t totalBytes = 0;
 
 		static void OpenFile(const filesystem::path& path)
