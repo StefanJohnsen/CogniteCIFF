@@ -2,8 +2,11 @@
 
 #include "../CadCast.h"
 #include "../CmdArgs.h"
+#include "../CmdBar.h"
 #include "../FileType.h"
 #include "../ReadCIFF.h"
+#include "../WriteBuffer.h"
+#include "../WriteStatistics.h"
 
 #include <exception>
 #include <iostream>
@@ -11,7 +14,13 @@
 
 namespace ciff
 {
-    int ConvertToFile(const std::filesystem::path& sourcePath, const std::filesystem::path& targetPath)
+    int ConvertToFile(
+        const std::filesystem::path& sourcePath,
+        const std::filesystem::path& targetPath,
+        const bool async,
+        const bool bar,
+        const bool statistics,
+        const bool speedtest)
     {
         try
         {
@@ -22,12 +31,19 @@ namespace ciff
             }
 
             const auto target = targetType(targetPath.string());
-            cmd::async = target == CogniteCIFF || target == WavefrontOBJ;
+            cmd::async = async;
+            cmd::bar = bar && !speedtest;
+            cmd::statistics = statistics && !speedtest;
+            cmd::speedtest = speedtest;
+            WriteBuffer::enabled = !speedtest;
+            ciff::bar::idle(!cmd::bar);
 
             Read data(sourcePath.string(), targetPath.string());
             data.load();
 
-            return ConvertToFile(target, data) ? 0 : 1;
+            const bool converted = ConvertToFile(target, data);
+            ciff::statistics::print(data);
+            return converted ? 0 : 1;
         }
         catch (const std::bad_alloc&)
         {
