@@ -207,6 +207,16 @@ namespace ciff
 		{
 			for (auto& v : mesh.vertices)
 				v = applyMatrix(m, v);
+
+			const double det =
+				static_cast<double>(m[0]) * (static_cast<double>(m[4]) * m[8] - static_cast<double>(m[7]) * m[5]) -
+				static_cast<double>(m[3]) * (static_cast<double>(m[1]) * m[8] - static_cast<double>(m[7]) * m[2]) +
+				static_cast<double>(m[6]) * (static_cast<double>(m[1]) * m[5] - static_cast<double>(m[4]) * m[2]);
+			if (det < 0.0)
+			{
+				for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+					std::swap(mesh.indices[i + 1], mesh.indices[i + 2]);
+			}
 		}
 
 		// -------- Box (LOCAL: centred at origin, axis-aligned) --------

@@ -16,7 +16,6 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -26,6 +25,7 @@
 #include <vector>
 
 #include "Convert.h"
+#include "MeshNormals.h"
 #include "ProcessCIFF.h"
 #include "Util.h"
 
@@ -178,29 +178,30 @@ namespace ciff::rvm
 	static Matrix3x4 identityMatrix()
 	{
 		return Matrix3x4{
-			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
+			1.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 1.0f,
+			0.0f, 0.0f, 0.0f,
 		};
 	}
 
-	static Point3 toPoint(const ciff::Point& p)
+	static Point3 toPoint(const vector<float>& values, const size_t i)
 	{
 		return Point3{
-			static_cast<float>(p.x),
-			static_cast<float>(p.y),
-			static_cast<float>(p.z),
+			values[3 * i],
+			values[3 * i + 1],
+			values[3 * i + 2],
 		};
 	}
 
-	static BoundingBox computeBoundingBox(const ciff::Mesh& mesh)
+	static BoundingBox computeBoundingBox(const ciff::normal_processing::RenderGeometry& mesh)
 	{
 		BoundingBox box;
 		bool hasPoint = false;
 
-		for (const auto& v : mesh.vertices)
+		for (size_t i = 0; i < mesh.points(); ++i)
 		{
-			const auto p = toPoint(v);
+			const auto p = toPoint(mesh.positions, i);
 
 			if (!hasPoint)
 			{
@@ -219,32 +220,6 @@ namespace ciff::rvm
 		}
 
 		return box;
-	}
-
-	static Point3 computeNormal(const ciff::Mesh& mesh, const uint32_t i0, const uint32_t i1, const uint32_t i2)
-	{
-		const auto a = toPoint(mesh.vertices[i0]);
-		const auto b = toPoint(mesh.vertices[i1]);
-		const auto c = toPoint(mesh.vertices[i2]);
-
-		const float ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
-		const float vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
-
-		Point3 normal{
-			uy * vz - uz * vy,
-			uz * vx - ux * vz,
-			ux * vy - uy * vx,
-		};
-
-		const auto length = std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-
-		if (length <= numeric_limits<float>::epsilon())
-			return Point3{ 0.0f, 0.0f, 1.0f };
-
-		normal.x /= length;
-		normal.y /= length;
-		normal.z /= length;
-		return normal;
 	}
 
 	struct Head
@@ -364,7 +339,7 @@ namespace ciff::rvm
 	struct FacetGroupGeometry
 	{
 		// Each triangle => one Facet that contains a single 3-vertex Polygon.
-		static void Write(WriteBuffer& write, const ciff::Mesh& mesh)
+		static void Write(WriteBuffer& write, const ciff::normal_processing::RenderGeometry& mesh)
 		{
 			const auto triangleCount = mesh.triangles();
 
@@ -382,14 +357,11 @@ namespace ciff::rvm
 				// Polygon: 3 vertices
 				rvm::write(write, static_cast<uint32_t>(3));
 
-				const auto normal = computeNormal(mesh, i0, i1, i2);
-
-				rvm::write(write, toPoint(mesh.vertices[i0]));
-				rvm::write(write, normal);
-				rvm::write(write, toPoint(mesh.vertices[i1]));
-				rvm::write(write, normal);
-				rvm::write(write, toPoint(mesh.vertices[i2]));
-				rvm::write(write, normal);
+				for (const auto index : {i0, i1, i2})
+				{
+					rvm::write(write, toPoint(mesh.positions, index));
+					rvm::write(write, toPoint(mesh.normals, index));
+				}
 			}
 		}
 	};
@@ -454,7 +426,8 @@ namespace ciff::rvm
 
 		void WriteGeometry(const ciff::Node&, const size_t geometryIndex) override
 		{
-			const auto mesh = ciff::TessellateGeometry(data, geometryIndex);
+			const auto mesh = ciff::normal_processing::FinalizeMeshNormals(
+				ciff::TessellateGeometry(data, geometryIndex));
 
 			if (mesh.empty())
 				return;
