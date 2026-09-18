@@ -121,7 +121,7 @@ namespace ciff::normal_processing
 
         struct OutputVertexKey
         {
-            uint32_t sourcePoint = 0;
+            uint32_t weldedPoint = 0;
             size_t normalGroup = 0;
 
             bool operator==(const OutputVertexKey&) const noexcept = default;
@@ -131,7 +131,7 @@ namespace ciff::normal_processing
         {
             size_t operator()(const OutputVertexKey& key) const noexcept
             {
-                size_t hash = std::hash<uint32_t>{}(key.sourcePoint);
+                size_t hash = std::hash<uint32_t>{}(key.weldedPoint);
                 hash ^= std::hash<size_t>{}(key.normalGroup) + 0x9e3779b9ULL + (hash << 6) + (hash >> 2);
                 return hash;
             }
@@ -446,7 +446,7 @@ namespace ciff::normal_processing
             for (size_t corner = 0; corner < 3; ++corner)
             {
                 const auto root = normalGroups.find(faceIndex * 3 + corner);
-                const OutputVertexKey key{face.sourcePoints[corner], root};
+                const OutputVertexKey key{face.weldedPoints[corner], root};
                 const auto found = outputVertexByKey.find(key);
                 if (found != outputVertexByKey.end())
                 {
