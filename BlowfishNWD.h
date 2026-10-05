@@ -5,6 +5,13 @@
   Navisworks LcUChunk frames. LcUBlowfishFilter passes each block as
   two little-endian uint32_t words; that word order differs from the
   network-byte-order convention used by many Blowfish byte APIs.
+
+  Blowfish was designed by Bruce Schneier.
+  Algorithm: https://www.schneier.com/academic/blowfish/
+  The initialP and initialS tables contain the standard hexadecimal
+  digits of pi published on Bruce Schneier's website:
+  https://www.schneier.com/code/constants.txt
+  The published constants listing credits Mike Schaudies.
 ----------------------------------------------------------------*/
 
 #pragma once
@@ -22,6 +29,7 @@ namespace nwd::blowfish
     namespace detail
     {
         // Standard Blowfish initialization words (hexadecimal digits of pi).
+        // Source: Bruce Schneier's website; see the links in the file header.
         inline constexpr std::array<uint32_t, 18> initialP{
             0x243f6a88U, 0x85a308d3U, 0x13198a2eU, 0x03707344U, 0xa4093822U, 0x299f31d0U,
             0x082efa98U, 0xec4e6c89U, 0x452821e6U, 0x38d01377U, 0xbe5466cfU, 0x34e90c6cU,
