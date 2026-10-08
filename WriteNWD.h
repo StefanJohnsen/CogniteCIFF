@@ -209,17 +209,10 @@ namespace nwd::write
         inline constexpr std::string_view Archive448CurrentViewStoredBase64 =
             "eJzzZmbABAeCHCB0kUMcz0bGdPf9+9GVHO+RN51/6L09hPfBvoqh+88vxZdwPoRWccBiOhDYQcQb0lBpBj2H/0CA6Z4iB5i5jGhSYP6C"
             "Poh8x2a4fUc0w3h2BReD+UxYXIAuxoQiBnM/ArCh0cQBTHOgoAFZnp3K5mGLUkrMwxZ+lJjHQmXzWKlsHqZ6dJpYe0jVh2kOANZpPDs=";
-        // Neutral light-grey Freedom background, matching the display profile
-        // used by topside6.nwd. This is decoded payload data; compressedChunk
-        // applies the canonical archive-448 storage encoding.
-        inline constexpr std::string_view CanonicalGreyBackgroundDecodedBase64 =
-            "AAAAAAAAAAAYGBgYGBjoPxgYGBgYGOg/GBgYGBgY6D+amZmZmZnpPwAAAAAAAPA/AAAAAAAA8D8AAAAAAADwPwAAAAAAAPA/"
-            "AAAAAAAA8D9aWlpaWlraP5KRkZGRkeE/3dzc3Nzc7D9aWlpaWlrqPx4eHh4eHu4/AAAAAAAA8D8eHh4eHh7ePx4eHh4eHt4/"
-            "Hh4eHh4e3j+cm5ubm5vrP5ybm5ubm+s/nJubm5ub6z8AAAAAAAAAAA==";
         inline constexpr std::string_view Archive448FileInfoStoredBase64 =
             "eJz7////fwYg8Ogtnrx1D5ffLNXKC24vwqRAYoxA7A7EgkCcnJ9XllpUkpqim1eeogfEDBDw4tT+n4/kBCJ3LNFiZsjaZMZAQD0I/EcC"
             "6Prx6ZU7+WHd9RfWQZ08QXlbjndsDWj9nZoYFe06/X51+SXVqRNBagBPmUwq";
-        inline constexpr size_t MinimumSemanticChunkCount = 8U;
+        inline constexpr size_t MinimumSemanticChunkCount = 9U;
 
 
         [[nodiscard]] inline uint32_t asU32(const size_t value, const char* label)
@@ -727,6 +720,37 @@ namespace nwd::write
             };
         }
 
+        [[nodiscard]] inline StoredChunk makeInitialTool()
+        {
+            // Native initial left-drag evidence: NavisworksNWD/docs/research/
+            // nwd-tool-navigation-2026-10-08/REPORT.md. No public enum is assigned.
+            auto writer = ByteWriter{};
+            writer.writeU32(503U);
+            writer.writeU32(0U);
+            return compressedChunk(std::string{SemanticSourceNamespace} + "\\LcOpToolElement",
+                                   std::move(writer).take());
+        }
+
+        [[nodiscard]] inline StoredChunk makeBlueBackground()
+        {
+            // Fixed archive-448 layout validated in NavisworksNWD/docs/research/
+            // nwd-background-2026-10-08/REPORT.md; parameter meanings are unassigned.
+            constexpr std::array<double, 3> color{128.0 / 255.0, 128.0 / 255.0, 1.0};
+            constexpr std::array<double, 19> parameters{
+                0.8, 1, 1, 1, 1, 1, 105.0 / 255.0, 140.0 / 255.0, 230.0 / 255.0,
+                210.0 / 255.0, 240.0 / 255.0, 1, 120.0 / 255.0, 120.0 / 255.0,
+                120.0 / 255.0, 220.0 / 255.0, 220.0 / 255.0, 220.0 / 255.0, 0};
+            auto writer = ByteWriter{};
+            writer.writeU32(0U);
+            writer.writeU32(0U);
+            for (const auto value : color)
+                writer.writeDouble(value);
+            for (const auto value : parameters)
+                writer.writeDouble(value);
+            return compressedChunk(std::string{SemanticSourceNamespace} + "\\LcOpBackgroundElement",
+                                   std::move(writer).take());
+        }
+
         inline void writeU32At(Bytes& bytes, const size_t offset, const uint32_t value)
         {
             if (offset > bytes.size() || sizeof(value) > bytes.size() - offset)
@@ -1181,6 +1205,7 @@ namespace nwd::write
             chunks.push_back(std::move(semantic.logicalHierarchy));
             chunks.push_back(std::move(semantic.fragments));
             chunks.push_back(std::move(semantic.spatialHierarchy));
+            chunks.push_back(makeInitialTool());
             if (semantic.currentView)
                 chunks.push_back(std::move(*semantic.currentView));
             if (semantic.headlight)
@@ -2218,9 +2243,7 @@ namespace nwd::write
                 detail::makeSpatialHierarchy(spatialBounds)),
             .currentView = detail::makeCurrentView(spatialBounds),
             .headlight = std::nullopt,
-            .background = detail::compressedChunk(
-                source + "\\LcOpBackgroundElement",
-                detail::decodeBase64(detail::CanonicalGreyBackgroundDecodedBase64)),
+            .background = detail::makeBlueBackground(),
             .shadOverrides = std::nullopt,
             .lights = std::nullopt,
         });

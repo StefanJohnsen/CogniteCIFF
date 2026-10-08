@@ -21,6 +21,17 @@ repositories: header-only converters in `Convert*.h`, format-specific
 reader in `ReadCIFF.h` / `StreamCIFF.h`, primitives in `PrimitivesCIFF.h`
 and a shared `Convert` base class in `Convert.h`.
 
+NWD output includes the standalone compressed `LcOpToolElement` payload
+`[503, 0]` for initial left-drag Orbit. The two little-endian words and native
+behavior are documented in the local
+[navigation evidence](../NavisworksNWD/docs/research/nwd-tool-navigation-2026-10-08/REPORT.md).
+This observed value is not declared a universal tool enum.
+The generated scene background is north's blue RGB `(128,128,255)`, serialized
+as the validated 184-byte archive-448 layout in the local
+[background evidence](../NavisworksNWD/docs/research/nwd-background-2026-10-08/REPORT.md).
+The [cross-converter checks](../NavisworksNWD/docs/research/cadcast-nwd-scene-defaults-2026-10-08/REPORT.md)
+record the generated files and verified initial left-drag behavior in Freedom.
+
 ## Build
 
 Open `CogniteCIFF.sln` in Visual Studio 2022 (toolset `v143`, C++20) and
