@@ -92,6 +92,8 @@
     <ClCompile Include="..\PrimitivesCIFF.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\ConvertDWG.h" />
+    <ClInclude Include="..\DefaultDWG.h" />
     <ClInclude Include="ConvertToFile.h" />
     <ClInclude Include="ConvertToScene.h" />
     <ClInclude Include="SceneData.h" />

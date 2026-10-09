@@ -3,6 +3,7 @@
 #include "Convert3D.h"
 #include "ConvertCIFF.h"
 #include "ConvertDAT.h"
+#include "ConvertDWG.h"
 #include "ConvertFBX.h"
 #include "ConvertGLTF.h"
 #include "ConvertJSON.h"
@@ -40,6 +41,8 @@ namespace ciff
                 return data::convert(data);
             case NavisworksNWD:
                 return nwd::convert(data);
+            case AutodeskDWG:
+                return dwg::convert(data);
             case UnknownCAD:
             default:
                 std::cerr << "Unsupported target file extension." << std::endl;

@@ -167,6 +167,8 @@
     <ClInclude Include="ConvertOBJ.h" />
     <ClInclude Include="ConvertRVM.h" />
     <ClInclude Include="ConvertNWD.h" />
+    <ClInclude Include="ConvertDWG.h" />
+    <ClInclude Include="DefaultDWG.h" />
     <ClInclude Include="ConvertTXT.h" />
     <ClInclude Include="FileType.h" />
     <ClInclude Include="MeshNormals.h" />

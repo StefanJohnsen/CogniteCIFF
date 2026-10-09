@@ -111,6 +111,9 @@ namespace ciff
         std::vector<GeneralCylinder> generalCylinders;
 
         ReadPrimitives MESH;
+        // Mesh records containing positions and no faces are retained as a
+        // count so surface exporters can report their omission explicitly.
+        size_t omittedPointGeometryCount = 0;
 
       private:
         struct OpenNode
@@ -542,7 +545,11 @@ namespace ciff
         size_t emitMeshGeometry(Mesh&& mesh, const size_t nodeColor)
         {
             if (mesh.empty())
+            {
+                if (!mesh.vertices.empty() && mesh.indices.empty())
+                    ++omittedPointGeometryCount;
                 return max_size;
+            }
 
             mesh.color = nodeColor;
             meshes.emplace_back(std::move(mesh));

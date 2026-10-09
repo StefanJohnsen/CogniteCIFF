@@ -10,6 +10,7 @@ emits one of:
 | AVEVA RVM           | `.rvm`  | Working (flat facet normals) |
 | FalconCoding 3D    | `.3d`  | Working (instanced meshes with normals) |
 | Navisworks NWD      | `.nwd`  | Working (hierarchy, normals and materials) |
+| Autodesk DWG       | `.dwg`  | Native AutoCAD 2000 triangle surfaces, layers and ACI colors |
 | Khronos glTF        | `.gltf` | Working (positions, normals and materials) |
 | Wavefront OBJ       | `.obj`  | Working (positions, normals and faces) |
 | Hierarchy text      | `.txt`  | Working |
@@ -20,6 +21,11 @@ The project structure mirrors the `AutodeskFBX` and `AvevaRvmDebug`
 repositories: header-only converters in `Convert*.h`, format-specific
 reader in `ReadCIFF.h` / `StreamCIFF.h`, primitives in `PrimitivesCIFF.h`
 and a shared `Convert` base class in `Convert.h`.
+
+Native DWG output keeps numeric world coordinates and declares unitless drawing units
+because CIFF carries no unit declaration. Node names become layers, RGB colors use the
+ACI palette, and transparency is omitted. Point-only mesh records are counted and
+omitted with a warning. See the [DWG scope and provenance](docs/DWG_EXPORT.md).
 
 NWD output includes the standalone compressed `LcOpToolElement` payload
 `[503, 0]` for initial left-drag Orbit. The two little-endian words and native

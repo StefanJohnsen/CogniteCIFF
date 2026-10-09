@@ -67,6 +67,12 @@
     <ClInclude Include="ConvertRVM.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="ConvertDWG.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DefaultDWG.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
     <ClInclude Include="ConvertNWD.h">
       <Filter>Source Files</Filter>
     </ClInclude>

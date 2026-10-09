@@ -31,3 +31,18 @@ if(FALCON_BUILD_CLI)
     target_link_libraries(CogniteCIFF PRIVATE Threads::Threads)
     set_target_properties(CogniteCIFF PROPERTIES CXX_EXTENSIONS OFF)
 endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(CiffDwgExport tests/CiffDwgExport.cpp)
+    target_link_libraries(CiffDwgExport PRIVATE CogniteCiffLib)
+    add_test(NAME CiffDwgExport COMMAND CiffDwgExport "${CMAKE_CURRENT_BINARY_DIR}/ciff-dwg-regression")
+    if(FALCON_BUILD_CLI)
+        find_package(Python3 COMPONENTS Interpreter QUIET)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME CiffDwgCli COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/CiffDwgCli.py" $<TARGET_FILE:CogniteCIFF>
+                "${CMAKE_CURRENT_BINARY_DIR}/ciff-dwg-cli-regression")
+        endif()
+    endif()
+endif()
