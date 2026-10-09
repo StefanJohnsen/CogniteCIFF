@@ -71,7 +71,8 @@ namespace ciff::cmd
 	inline std::string text_version = "CogniteCIFFConverter  version: 0.1.0";
 
 	inline const std::vector<std::string> source_ext = { "ciff" };
-	inline const std::vector<std::string> target_ext = { "ciff", "fbx", "rvm", "3d", "gltf", "obj", "json", "dat", "txt", "nwd", "dwg" };
+    inline const std::vector<std::string> target_ext = {"ciff", "3d",  "obj", "gltf", "json", "dat",
+                                                        "txt",  "rvm", "fbx", "nwd",  "dwg"};
 
 	inline cmd_flag async{ "async" };
 	inline cmd_flag help{ "help" };
@@ -98,44 +99,43 @@ namespace ciff::cmd
 		return out;
 	}
 
-	inline std::string text_help = []()
-		{
-			std::string s;
+    inline std::string text_help = []() {
+        std::string s;
 
-			s += "\nUsage: <source_file_or_directory> [target_file] [options]\n\n";
-			s += "Options:\n\n";
-			s += "  -async        Run the process asynchronously using multithreading for parallel execution\n";
-			s += "                Supported only for ciff and obj target formats\n";
-			s += "  -help         Show this help message\n";
-			s += "  -version      Version\n";
-			s += "  -bar          Show progress bar\n";
-			s += "  -format <ext> Select target format when target is omitted or is a directory\n";
-			s += "                Accepts ";
-			s += join(target_ext, ", ");
-			s += "\n";
-			s += "                Also accepts --format <ext> and -format=<ext>\n";
-			s += "  -statistics   Show statistics after processing\n";
-			s += "  -mesh         No primitives, only mesh. Yields only for ciff format\n";
-			s += "\n";
-			s += "File extensions:\n\n";
-			s += "  Source: ";
-			s += join(source_ext, ", ");
-			s += "\n";
-			s += "  Target: ";
-			s += join(target_ext, ", ");
-			s += "\n\n";
-			s += "Notes:\n\n";
-			s += "  Paths are resolved relative to the current working directory.\n";
-			s += "  If target_file is given without a directory, it is placed next to the source file.\n";
-			s += "  If target_file is a directory, output is placed in that directory.\n";
-			s += "  If source_file is a directory and target_file is omitted, matching source files are batch converted.\n";
-			s += "  In that mode, -format controls the output extension for the generated files.\n";
-			s += "  If target_file is omitted, the output name is derived from the source file.\n";
-			s += "  The default target format is ciff unless -format is specified.\n";
-			s += "  A CIFF source requires a unique target when exporting to ciff.\n";
-			s += "  A source directory supports batch conversion; one single result file is not supported.\n";
-			return s;
-		}();
+        s += "\nUsage: <source_file_or_directory> [target_file] [options]\n\n";
+        s += "Options:\n\n";
+        s += "  -async        Run the process asynchronously using multithreading for parallel execution\n";
+        s += "                Supported only for ciff and obj target formats\n";
+        s += "  -help         Show this help message\n";
+        s += "  -version      Version\n";
+        s += "  -bar          Show progress bar\n";
+        s += "  -format <ext> Select target format when target is omitted or is a directory\n";
+        s += "                Accepts ";
+        s += join(target_ext, ", ");
+        s += "\n";
+        s += "                Also accepts --format <ext>, -format=<ext> and --format=<ext>\n";
+        s += "  -statistics   Show statistics after processing\n";
+        s += "  -mesh         No primitives, only mesh. Yields only for ciff format\n";
+        s += "\n";
+        s += "File extensions:\n\n";
+        s += "  Source: ";
+        s += join(source_ext, ", ");
+        s += "\n";
+        s += "  Target: ";
+        s += join(target_ext, ", ");
+        s += "\n\n";
+        s += "Notes:\n\n";
+        s += "  Paths are resolved relative to the current working directory.\n";
+        s += "  If target_file is given without a directory, it is placed next to the source file.\n";
+        s += "  If target_file is a directory, output is placed in that directory.\n";
+        s += "  If source_file is a directory and target_file is omitted, matching source files are batch converted.\n";
+        s += "  In that mode, -format controls the output extension for the generated files.\n";
+        s += "  If target_file is omitted, the output name is derived from the source file.\n";
+        s += "  The default target format is ciff unless -format is specified.\n";
+        s += "  A CIFF source requires a unique target when exporting to ciff.\n";
+        s += "  Converting a source directory to one target file is not supported.\n";
+        return s;
+    }();
 
 	inline std::string format(const Msg m,
 		const std::string& s = std::string(),
@@ -456,6 +456,10 @@ namespace ciff::cmd
 
 				if (_target.parent_path().empty())
 					_target = std::filesystem::current_path() / _target;
+
+				if (!std::filesystem::is_directory(_target) &&
+					(_target.has_extension() || std::filesystem::is_regular_file(_target)))
+					return cmd::err("Converting a source directory to one target file is not supported.");
 
 				if (!std::filesystem::exists(_target))
 					return err(Msg::TargetDirectoryDoesNotExist, {}, _target);
