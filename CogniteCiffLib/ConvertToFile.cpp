@@ -19,8 +19,7 @@ namespace ciff
         const std::filesystem::path& targetPath,
         const bool async,
         const bool bar,
-        const bool statistics,
-        const bool speedtest)
+        const bool statistics)
     {
         try
         {
@@ -31,11 +30,11 @@ namespace ciff
             }
 
             const auto target = targetType(targetPath.string());
+            cmd::mesh.clear();
             cmd::async = async;
-            cmd::bar = bar && !speedtest;
-            cmd::statistics = statistics && !speedtest;
-            cmd::speedtest = speedtest;
-            WriteBuffer::enabled = !speedtest;
+            cmd::bar = bar;
+            cmd::statistics = statistics;
+            WriteBuffer::enabled = true;
             ciff::bar::idle(!cmd::bar);
 
             Read data(sourcePath.string(), targetPath.string());

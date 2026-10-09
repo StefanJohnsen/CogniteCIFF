@@ -1,5 +1,8 @@
 #include <filesystem>
+#include <exception>
 #include <iostream>
+#include <new>
+#include <unordered_set>
 #include <vector>
 
 #include "CadCast.h"
@@ -33,6 +36,21 @@ static std::vector<std::filesystem::path> enumAllFilesInDirectory(const std::fil
 	return files;
 }
 
+static std::string normalizedPathKey(const std::filesystem::path& value)
+{
+    std::error_code ec;
+    auto path = std::filesystem::weakly_canonical(value, ec);
+
+    if (ec)
+        path = std::filesystem::absolute(value);
+
+    auto key = path.lexically_normal().generic_string();
+#if defined(_WIN32)
+    key = cmd::tolower(std::move(key));
+#endif
+    return key;
+}
+
 static bool convert(const std::string& source_cad, const std::string& target_cad)
 {
 	if (cmd::bar)
@@ -41,38 +59,52 @@ static bool convert(const std::string& source_cad, const std::string& target_cad
 	if (sourceType(source_cad) != CogniteCIFF)
 		throw std::logic_error("Unsupported source type");
 
-	ciff::Read data(source_cad, target_cad);
-	data.load();
+    try
+    {
+        ciff::Read data(source_cad, target_cad);
+        data.load();
 
-	const bool result = ciff::ConvertToFile(targetType(target_cad), data);
+        const bool result = ciff::ConvertToFile(targetType(target_cad), data);
+        statistics::print(data);
+        return result;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::cerr << "CIFF conversion requires more memory than is currently available." << std::endl;
+    }
+    catch (const std::exception& exception)
+    {
+        std::cerr << "CIFF conversion failed: " << exception.what() << std::endl;
+    }
+    catch (...)
+    {
+        std::cerr << "CIFF conversion failed with an unexpected error." << std::endl;
+    }
 
-	statistics::print(data);
-	return result;
+    return false;
 }
 
 static bool evaluateArg()
 {
 	const bool targetIsDirectory = !cmd::target.empty() && std::filesystem::is_directory(cmd::target);
-
-	if (cmd::speedtest)
-	{
-		cmd::bar = false;
-		cmd::statistics = false;
-		ciff::WriteBuffer::enabled = false;
-	}
+	const auto effectiveTargetExtension = cmd::target.empty() || targetIsDirectory
+		? "." + cmd::defaultTargetExt()
+		: cmd::tolower(cmd::target.extension().string());
 
 	if (cmd::async)
 	{
-		const auto asyncTargetExtension = cmd::target.empty() || targetIsDirectory
-			? "." + cmd::defaultTargetExt()
-			: cmd::tolower(cmd::target.extension().string());
-
-		if (asyncTargetExtension != ".ciff" && asyncTargetExtension != ".obj")
+		if (effectiveTargetExtension != ".ciff" && effectiveTargetExtension != ".obj")
 		{
-			cmd::err("Async conversion is only supported for ciff and obj target formats.");
+			cmd::err("Async is only supported for ciff and obj target formats.");
 			return false;
 		}
 	}
+
+    if (cmd::mesh && effectiveTargetExtension != ".ciff")
+    {
+        cmd::err("Mesh is only supported for ciff target format.");
+        return false;
+    }
 
 	return true;
 }
@@ -84,7 +116,10 @@ static int main_single()
 	const auto& source = cmd::source;
 	const auto& target = cmd::target;
 
-	std::cout << "\nConverting " << source.filename().string() << " to " << target.filename().string() << '\n';
+	std::cout << "\nConverting " << source.filename().string() << " to " << target.filename().string();
+    if (cmd::async)
+        std::cout << " (async processing)";
+    std::cout << '\n';
 
 	const auto converted = ::convert(source.string(), target.string());
 
@@ -120,18 +155,54 @@ static int main_multi()
 		sourceFiles.emplace_back(file);
 	}
 
+    if (sourceFiles.empty())
+    {
+        cmd::err("No CIFF source files found in directory: " + cmd::source.string());
+        return 1;
+    }
+
+    std::unordered_set<std::string> sourceKeys;
+    std::unordered_set<std::string> targetKeys;
+    std::vector<path> targets;
+    sourceKeys.reserve(sourceFiles.size());
+    targetKeys.reserve(sourceFiles.size());
+    targets.reserve(sourceFiles.size());
+
+    for (const auto& source : sourceFiles)
+        sourceKeys.emplace(normalizedPathKey(source));
+
+    for (const auto& source : sourceFiles)
+    {
+        auto target = source;
+        target.replace_extension(target_ext);
+
+        if (!cmd::target.empty())
+            target = cmd::target / target.filename();
+
+        const auto targetKey = normalizedPathKey(target);
+
+        if (sourceKeys.contains(targetKey))
+        {
+            cmd::err("Batch target would overwrite a CIFF source file: " + target.string());
+            return 1;
+        }
+        if (!targetKeys.emplace(targetKey).second)
+        {
+            cmd::err("Multiple CIFF source files resolve to the same batch target: " + target.string());
+            return 1;
+        }
+
+        targets.emplace_back(std::move(target));
+    }
+
 	size_t okCount = 0;
 	size_t failCount = 0;
 
-	for (const auto& source : sourceFiles)
+	for (size_t index = 0; index < sourceFiles.size(); ++index)
 	{
 		timer::start();
-
-		auto target = source;
-		target.replace_extension(target_ext);
-
-		if (!cmd::target.empty())
-			target = cmd::target / target.filename();
+        const auto& source = sourceFiles[index];
+        const auto& target = targets[index];
 
 		std::cout << source.string() << " is parsing ... ";
 
@@ -155,6 +226,9 @@ static int main_multi()
 		std::cout << "All files successfully converted to " << target_ext;
 	else
 		std::cout << okCount << " successfully converted, " << failCount << " failed";
+
+    if (cmd::async)
+        std::cout << " (async processing)";
 
 	std::cout << std::endl << std::endl;
 

@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "PrimitivesCIFF.h"
+#include "CmdArgs.h"
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -97,7 +98,8 @@ namespace ciff::primitive_stats
 			if (text.empty())
 				return;
 
-			std::cout << text;
+			if (cmd::statistics)
+				std::cout << text;
 
 #if defined(_WIN32)
 			OutputDebugStringA(text.c_str());

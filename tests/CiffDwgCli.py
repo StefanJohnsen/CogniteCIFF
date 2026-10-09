@@ -37,7 +37,4 @@ assert target.read_bytes()[:6] == b"AC1015", "Missing native binary DWG header"
 before = target.read_bytes()
 result = subprocess.run([str(cli), str(source), str(target), "-async"], capture_output=True, timeout=120)
 assert result.returncode != 0 and target.read_bytes() == before, "Async rejection changed the target"
-speed_target = folder / "speedtest.dwg"
-result = subprocess.run([str(cli), str(source), str(speed_target), "-speedtest"], capture_output=True, timeout=120)
-assert result.returncode == 0 and not speed_target.exists(), "Speedtest published an output"
-print("Public CIFF CLI DWG export, point warning, async and speedtest checks passed")
+print("Public CIFF CLI DWG export, point warning and async checks passed")

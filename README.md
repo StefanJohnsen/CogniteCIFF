@@ -123,7 +123,7 @@ CogniteCIFF <source.ciff> [target_file_or_directory] [options]
 
 Run `CogniteCIFF -help` for the full list of options. The same flags as
 in the sibling repositories are supported (`-bar`, `-statistics`,
-`-format`, `-speedtest`, ...).
+`-format`, `-mesh`, ...).
 
 ## Layout
 

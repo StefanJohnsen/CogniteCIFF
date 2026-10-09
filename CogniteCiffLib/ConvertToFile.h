@@ -9,6 +9,5 @@ namespace ciff
         const std::filesystem::path& targetPath,
         bool async,
         bool bar,
-        bool statistics,
-        bool speedtest);
+        bool statistics);
 }
