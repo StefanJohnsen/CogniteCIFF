@@ -97,6 +97,7 @@
     <ClInclude Include="ConvertToFile.h" />
     <ClInclude Include="ConvertToScene.h" />
     <ClInclude Include="SceneData.h" />
+    <ClInclude Include="..\Write.h" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

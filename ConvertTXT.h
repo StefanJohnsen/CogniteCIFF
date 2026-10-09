@@ -5,9 +5,11 @@
 #include <string>
 
 #include "Convert.h"
+#include "Write.h"
 
 namespace ciff::text
 {
+	using ciff::write;
 	struct Convert final : ciff::Convert
 	{
 		size_t depth = 0;
@@ -28,7 +30,7 @@ namespace ciff::text
 				<< ", geometries=" << node.geometries.size() << "]\n";
 
 			const auto str = line.str();
-			write.write(str.c_str(), str.size());
+			text::write(write, str);
 		}
 
 		void WriteGeometry(const ciff::Node&, size_t) override

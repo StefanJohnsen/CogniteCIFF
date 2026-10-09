@@ -4,9 +4,11 @@
 #include <string>
 
 #include "Convert.h"
+#include "Write.h"
 
 namespace ciff::json
 {
+	using ciff::write;
 	struct Convert final : ciff::Convert
 	{
 		bool first = true;
@@ -18,7 +20,7 @@ namespace ciff::json
 		void WriteHeader() override
 		{
 			const std::string head = "{\n  \"nodes\": [\n";
-			write.write(head.c_str(), head.size());
+			json::write(write, head);
 		}
 
 		void WriteNode(const ciff::Node& node) override
@@ -35,7 +37,7 @@ namespace ciff::json
 				<< ", \"geometries\": " << node.geometries.size() << "}";
 
 			const auto str = line.str();
-			write.write(str.c_str(), str.size());
+			json::write(write, str);
 		}
 
 		void WriteGeometry(const ciff::Node&, size_t) override
@@ -49,7 +51,7 @@ namespace ciff::json
 		void WriteFooter() override
 		{
 			const std::string tail = "\n  ]\n}\n";
-			write.write(tail.c_str(), tail.size());
+			json::write(write, tail);
 		}
 	};
 

@@ -10,7 +10,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cstdarg>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -25,34 +24,13 @@
 #include "MeshNormals.h"
 #include "ProcessCIFF.h"
 #include "Util.h"
-#include "WriteBuffer.h"
+#include "Write.h"
 
 namespace ciff::obj
 {
 	using namespace std;
-
-	inline void write(WriteBuffer& write, const string& str)
-	{
-		write.write(str);
-	}
-
-	inline void write(WriteBuffer& write, const char* format, ...)
-	{
-		char tempBuffer[1024];
-
-		va_list args;
-		va_start(args, format);
-		const int len = vsnprintf(tempBuffer, sizeof(tempBuffer), format, args);
-		va_end(args);
-
-		if (len < 0)
-			throw runtime_error("Error formatting string in WriteBuffer");
-
-		if (static_cast<size_t>(len) >= sizeof(tempBuffer))
-			throw overflow_error("Formatted string exceeds temporary buffer size");
-
-		write.write(tempBuffer, static_cast<size_t>(len));
-	}
+	using ciff::write;
+	using ciff::writeFormatted;
 
 	inline string fileName(const string& file)
 	{
@@ -101,9 +79,9 @@ namespace ciff::obj
 
 				obj::write(mtl, "newmtl " + materialName(i) + "\n");
 				obj::write(mtl, "Ka 0.000 0.000 0.000\n");
-				obj::write(mtl, "Kd %.3f %.3f %.3f\n", r, g, b);
+				obj::writeFormatted(mtl, "Kd %.3f %.3f %.3f\n", r, g, b);
 				obj::write(mtl, "Ks 0.000 0.000 0.000\n");
-				obj::write(mtl, "d  %.3f\n", d);
+				obj::writeFormatted(mtl, "d  %.3f\n", d);
 				obj::write(mtl, "illum 1\n\n");
 			}
 
@@ -265,11 +243,11 @@ namespace ciff::obj
 			WriteMaterialReference(geometry.color);
 
 			for (size_t i = 0; i < mesh.positions.size(); i += 3)
-				obj::write(write, "v %.9g %.9g %.9g\n",
+				obj::writeFormatted(write, "v %.9g %.9g %.9g\n",
 				           mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]);
 
 			for (size_t i = 0; i < mesh.normals.size(); i += 3)
-				obj::write(write, "vn %.9g %.9g %.9g\n",
+				obj::writeFormatted(write, "vn %.9g %.9g %.9g\n",
 				           mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]);
 
 			const auto points = static_cast<int64_t>(mesh.points());
@@ -279,7 +257,7 @@ namespace ciff::obj
 				const auto v1 = static_cast<int64_t>(mesh.indices[3 * t + 0]) - points;
 				const auto v2 = static_cast<int64_t>(mesh.indices[3 * t + 1]) - points;
 				const auto v3 = static_cast<int64_t>(mesh.indices[3 * t + 2]) - points;
-				obj::write(write, "f %lld//%lld %lld//%lld %lld//%lld\n",
+				obj::writeFormatted(write, "f %lld//%lld %lld//%lld %lld//%lld\n",
 				           v1, v1, v2, v2, v3, v3);
 			}
 

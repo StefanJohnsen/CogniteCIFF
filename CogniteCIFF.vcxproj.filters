@@ -118,6 +118,9 @@
     <ClInclude Include="Util.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="Write.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
     <ClInclude Include="WriteBuffer.h">
       <Filter>Source Files</Filter>
     </ClInclude>

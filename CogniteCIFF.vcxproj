@@ -183,6 +183,7 @@
     <ClInclude Include="StreamCIFF.h" />
     <ClInclude Include="StreamFile.h" />
     <ClInclude Include="Util.h" />
+    <ClInclude Include="Write.h" />
     <ClInclude Include="WriteBuffer.h" />
     <ClInclude Include="Zlib.h" />
     <ClInclude Include="BlowfishNWD.h" />

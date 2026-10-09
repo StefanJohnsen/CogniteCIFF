@@ -108,28 +108,18 @@ struct WriteBuffer
 
 	void write(const std::string& str)
 	{
-		writeToBuffer(str.c_str(), str.length());
+		writeDataToBuffer(str.c_str(), str.length());
 	}
 
 	void write(const char* str, const size_t size)
 	{
-		writeToBuffer(str, size);
-	}
-
-	void write(const float f)
-	{
-		writeToBuffer(f);
-	}
-
-	void write(const double d)
-	{
-		writeToBuffer(d);
+		writeDataToBuffer(str, size);
 	}
 
 	template <typename T>
 	void write(const T& t)
 	{
-		writeToBuffer(t);
+		writeDataToBuffer(&t, 1);
 	}
 
 	template <typename T>
@@ -345,17 +335,6 @@ private:
 	}
 
 	template <typename T>
-	void writeToBuffer(const T& t)
-	{
-		writeDataToBuffer(&t, 1);
-	}
-
-	void writeToBuffer(const char* data, const size_t byteCount)
-	{
-		writeDataToBuffer(data, byteCount);
-	}
-
-	template <typename T>
 	void writeDataToBuffer(const T* data, const size_t elementCount)
 	{
 		if (!enabled || !stream.is_open() || data == nullptr || elementCount == 0)
@@ -376,37 +355,6 @@ private:
 			{
 				const size_t chunkSize = std::min(buffer.size(), byteCount - written);
 				stream.write(raw + written, static_cast<std::streamsize>(chunkSize));
-
-				if (!stream)
-					throw std::ios_base::failure("Failed to write large data directly to file");
-
-				written += chunkSize;
-			}
-
-			return;
-		}
-
-		if (position + byteCount > buffer.size())
-			flush();
-
-		std::memcpy(buffer.data() + position, data, byteCount);
-		position += byteCount;
-	}
-
-	void writeDataToBuffer(const char* data, const size_t byteCount)
-	{
-		if (!enabled || !stream.is_open() || data == nullptr || byteCount == 0)
-			return;
-
-		if (byteCount > buffer.size())
-		{
-			flush();
-
-			size_t written = 0;
-			while (written < byteCount)
-			{
-				const size_t chunkSize = std::min(buffer.size(), byteCount - written);
-				stream.write(data + written, static_cast<std::streamsize>(chunkSize));
 
 				if (!stream)
 					throw std::ios_base::failure("Failed to write large data directly to file");

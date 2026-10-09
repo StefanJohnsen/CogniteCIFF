@@ -37,10 +37,11 @@
 #include "PrimitiveInstanceCIFF.h"
 #include "PrimitiveStatsCIFF.h"
 #include "Util.h"
-#include "WriteBuffer.h"
+#include "Write.h"
 
 namespace ciff::f3d
 {
+    using ciff::write;
     using Matrix3x4 = std::array<float, 12>;
 
     inline constexpr std::uint32_t NativeMagicBytes = 0x46443343U;
@@ -134,19 +135,6 @@ namespace ciff::f3d
             : CheckedAdd(value, GeometryAlignment - remainder, fieldName);
     }
 
-    template <typename T>
-    inline void write(WriteBuffer& target, const T& value)
-    {
-        target.write(value);
-    }
-
-    template <typename T>
-    inline void write(WriteBuffer& target, const std::vector<T>& values)
-    {
-        if (!values.empty())
-            target.write(values.data(), values.size());
-    }
-
     inline void write(WriteBuffer& target, const Matrix3x4& matrix)
     {
         target.write(matrix.data(), matrix.size());
@@ -157,15 +145,6 @@ namespace ciff::f3d
         f3d::write(target, static_cast<std::uint32_t>(value.size()));
         if (!value.empty())
             target.write(value);
-    }
-
-    template <typename T>
-    inline std::size_t overwriteAt(
-        WriteBuffer& target,
-        const std::size_t position,
-        const T& value)
-    {
-        return target.overwriteAt(position, value);
     }
 
     inline void CloseChecked(WriteBuffer& stream, const char* sectionName)
@@ -194,7 +173,7 @@ namespace ciff::f3d
         {
             if (!written)
                 throw std::logic_error("Falcon3D stream value was not written");
-            f3d::overwriteAt(stream, position, value);
+            stream.overwriteAt(position, value);
         }
 
       private:

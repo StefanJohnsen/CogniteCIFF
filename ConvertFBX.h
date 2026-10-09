@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "Convert.h"
+#include "Write.h"
 #include "MeshNormals.h"
 #include "ProcessCIFF.h"
 #include "WriteBuffer.h"
@@ -68,18 +69,18 @@ namespace ciff::fbx
 	// ---- low-level binary FBX writers ----
 	struct Bin
 	{
-		static void U8(WriteBuffer& w, uint8_t v) { w.write(v); }
-		static void U16(WriteBuffer& w, uint16_t v) { w.write(v); }
-		static void U32(WriteBuffer& w, uint32_t v) { w.write(v); }
-		static void U64(WriteBuffer& w, uint64_t v) { w.write(v); }
-		static void I16(WriteBuffer& w, int16_t v) { w.write(v); }
-		static void I32(WriteBuffer& w, int32_t v) { w.write(v); }
-		static void I64(WriteBuffer& w, int64_t v) { w.write(v); }
-		static void F32(WriteBuffer& w, float v) { w.write(v); }
-		static void F64(WriteBuffer& w, double v) { w.write(v); }
+		static void U8(WriteBuffer& w, uint8_t v) { ciff::write(w, v); }
+		static void U16(WriteBuffer& w, uint16_t v) { ciff::write(w, v); }
+		static void U32(WriteBuffer& w, uint32_t v) { ciff::write(w, v); }
+		static void U64(WriteBuffer& w, uint64_t v) { ciff::write(w, v); }
+		static void I16(WriteBuffer& w, int16_t v) { ciff::write(w, v); }
+		static void I32(WriteBuffer& w, int32_t v) { ciff::write(w, v); }
+		static void I64(WriteBuffer& w, int64_t v) { ciff::write(w, v); }
+		static void F32(WriteBuffer& w, float v) { ciff::write(w, v); }
+		static void F64(WriteBuffer& w, double v) { ciff::write(w, v); }
 		static void Bytes(WriteBuffer& w, const void* p, size_t n)
 		{
-			w.write(static_cast<const char*>(p), n);
+			ciff::write(w, static_cast<const char*>(p), n);
 		}
 	};
 

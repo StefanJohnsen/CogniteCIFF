@@ -33,11 +33,12 @@
 #include "MeshNormals.h"
 #include "ProcessCIFF.h"
 #include "Util.h"
-#include "WriteBuffer.h"
+#include "Write.h"
 
 namespace ciff::gltf
 {
 	using namespace std;
+	using ciff::write;
 
 	inline string cleanJsonString(const string& src, const char replacement = ' ')
 	{
@@ -80,18 +81,7 @@ namespace ciff::gltf
 
 	inline void write(WriteBuffer& target, WriteBuffer& source)
 	{
-		source.close();
-		target.append(source.getFile(), true);
-	}
-
-	inline void write(WriteBuffer& w, const string& str)
-	{
-		w.write(str);
-	}
-
-	inline void write(WriteBuffer& w, const ostringstream& text)
-	{
-		w.write(text.str());
+		ciff::write(target, source, true);
 	}
 
 	// Hierarchy section - writes the "nodes" array of the JSON.

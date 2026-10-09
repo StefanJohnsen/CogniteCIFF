@@ -6,24 +6,14 @@
 #include <vector>
 
 #include "Convert.h"
+#include "Write.h"
 #include "ConvertAsync.h"
 #include "ProcessCIFF.h"
 
 namespace ciff::clone
 {
 	using namespace std;
-
-	template <typename T>
-	void write(WriteBuffer& write, const T& value)
-	{
-		write.write(value);
-	}
-
-	template <typename T>
-	void write(WriteBuffer& write, const vector<T>& values)
-	{
-		write.write(values.data(), values.size());
-	}
+	using ciff::write;
 
 	inline void write(WriteBuffer& write, const string& value)
 	{
@@ -34,6 +24,11 @@ namespace ciff::clone
 	inline void write(WriteBuffer& write, const char* value)
 	{
 		clone::write(write, string(value));
+	}
+
+	inline void write(WriteBuffer& write, char* value)
+	{
+		clone::write(write, static_cast<const char*>(value));
 	}
 
 	inline void write(WriteBuffer& write, const ciff::Point& point)
