@@ -1,0 +1,37 @@
+CIFF TO FALCON 3D - SYNC VS ASYNC
+RUNS: 3
+
+ENGINES
+Name | Executable
+-----|-----------
+CIFF | C:/FalconCoding/CogniteCIFF/x64/Release/CogniteCIFF.exe
+
+FILES
+Index | File
+------|-----
+0 | C:/3D/as1-oc-214.ciff
+1 | C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sources/Huldra-above-water.ciff
+2 | C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sources/Ship.ciff
+3 | C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sources/FalconGasPlant-Infrastructure.ciff
+4 | C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sources/IvarAasen-Cellar-Deck.ciff
+5 | C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sources/native-primitives.ciff
+
+PROCESSES - SYNC
+Index | Engine | Command Arguments
+------|--------|------------------
+0 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sync/{file.name}.3d
+1 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sync/{file.name}.3d
+2 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sync/{file.name}.3d
+3 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sync/{file.name}.3d
+4 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sync/{file.name}.3d
+5 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sync/{file.name}.3d
+
+PROCESSES - ASYNC
+Index | Engine | Command Arguments
+------|--------|------------------
+0 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/async/{file.name}.3d -async
+1 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/async/{file.name}.3d -async
+2 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/async/{file.name}.3d -async
+3 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/async/{file.name}.3d -async
+4 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/async/{file.name}.3d -async
+5 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/async/{file.name}.3d -async

@@ -93,6 +93,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\ConvertDWG.h" />
+    <ClInclude Include="..\GeometryPipelineCIFF.h" />
     <ClInclude Include="..\DefaultDWG.h" />
     <ClInclude Include="ConvertToFile.h" />
     <ClInclude Include="ConvertToScene.h" />

@@ -34,12 +34,18 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(CiffAsync3D tests/Async3D.cpp)
+    target_link_libraries(CiffAsync3D PRIVATE CogniteCiffLib)
+    add_test(NAME CiffAsync3D COMMAND CiffAsync3D "${CMAKE_CURRENT_BINARY_DIR}/ciff-async-3d-regression")
     add_executable(CiffDwgExport tests/CiffDwgExport.cpp)
     target_link_libraries(CiffDwgExport PRIVATE CogniteCiffLib)
     add_test(NAME CiffDwgExport COMMAND CiffDwgExport "${CMAKE_CURRENT_BINARY_DIR}/ciff-dwg-regression")
     if(FALCON_BUILD_CLI)
         find_package(Python3 COMPONENTS Interpreter QUIET)
         if(Python3_Interpreter_FOUND)
+            add_test(NAME CiffAsync3DCli COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/Async3DCLI.py"
+                --converter $<TARGET_FILE:CogniteCIFF> --fixture-writer $<TARGET_FILE:CiffAsync3D>)
             add_test(NAME CiffDwgCli COMMAND "${Python3_EXECUTABLE}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/CiffDwgCli.py" $<TARGET_FILE:CogniteCIFF>
                 "${CMAKE_CURRENT_BINARY_DIR}/ciff-dwg-cli-regression")

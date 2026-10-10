@@ -1,0 +1,65 @@
+[
+  {
+    "File": "as1-oc-214.ciff",
+    "InputBytes": 104469,
+    "InputSHA256": "2DF519895DAA651CC2D6213D08FCFDC269EAF9DC9894E2EDFD3FB143D91482EE",
+    "OutputBytes": 72624,
+    "OutputSHA256": "851B04CC5B4801D1DE394AA98A8C8B8094568A675632F19EF6C79C7E068ECE07",
+    "SyncAsyncIdentical": true,
+    "SourceUnchanged": true
+  },
+  {
+    "File": "99_NOA_PDQ_Special_optimized.ciff",
+    "InputBytes": 1913236547,
+    "InputSHA256": "35092180971479391E405CEEFAA534B4F4DACCD0189BFB135797CE83A8ECAD08",
+    "OutputBytes": 1047386964,
+    "OutputSHA256": "3C31CA0EBF7ABD8E05ABD294F741A1D0A10FEAE03BD7A07E85A12F911B9BCDCB",
+    "SyncAsyncIdentical": true,
+    "SourceUnchanged": true
+  },
+  {
+    "File": "FalconGasPlant-Infrastructure.ciff",
+    "InputBytes": 165131432,
+    "InputSHA256": "96DF65206811EDF668A8F5A52F43AA92FE3EE8D0FD5E63F1BF6C492C1CD8F38A",
+    "OutputBytes": 180637460,
+    "OutputSHA256": "0CC762E274133216761A7EDC82F6270BC47508FFB6D80F568701AE5734405336",
+    "SyncAsyncIdentical": true,
+    "SourceUnchanged": true
+  },
+  {
+    "File": "Huldra-above-water.ciff",
+    "InputBytes": 12229493,
+    "InputSHA256": "644D91F64EFF46FE929831D5429406E58E5BFF369A704A4A1B6692277EDAD817",
+    "OutputBytes": 3884356,
+    "OutputSHA256": "117F10C8EED7B48F9F5FC70FCF214E97AD989C77445420F9B8C0F621FC845C52",
+    "SyncAsyncIdentical": true,
+    "SourceUnchanged": true
+  },
+  {
+    "File": "IvarAasen-Cellar-Deck.ciff",
+    "InputBytes": 171285552,
+    "InputSHA256": "1580B1D3A1E83726A306A394805816935C8EE324E07C068DFC3088E1785C4E8A",
+    "OutputBytes": 64633540,
+    "OutputSHA256": "CB195D7B5D736F61310D66D1C52065C1CFD29EE5373B2FDF264A0BAC6CDAAD4E",
+    "SyncAsyncIdentical": true,
+    "SourceUnchanged": true
+  },
+  {
+    "File": "native-primitives.ciff",
+    "InputBytes": 344922,
+    "InputSHA256": "4B46A79EA64A34C478A30FBC9FD8FD2B20F1C5D06D2EDDBC46EDAB8204C98BDE",
+    "OutputBytes": 2379232,
+    "OutputSHA256": "F4CC650D71C6271CE53EA4D5A6A2ED01FDC4EDDC9F37A016C45870BB46DCB2CB",
+    "SyncAsyncIdentical": true,
+    "SourceUnchanged": true
+  },
+  {
+    "File": "Ship.ciff",
+    "InputBytes": 46097617,
+    "InputSHA256": "4B0CBDD1DF9A38520A36626C994ACCDDA46C419668DADFEF94740A9111D44130",
+    "OutputBytes": 49531668,
+    "OutputSHA256": "EB95C77745B405394023CED6E19B24500260A1E417ACF27E0D81CDAE4D28C225",
+    "SyncAsyncIdentical": true,
+    "SourceUnchanged": true
+  }
+]

@@ -33,6 +33,7 @@
 
 #include "Convert.h"
 #include "ConversionOutput.h"
+#include "GeometryPipelineCIFF.h"
 #include "MeshNormals.h"
 #include "PrimitiveInstanceCIFF.h"
 #include "PrimitiveStatsCIFF.h"
@@ -325,8 +326,14 @@ namespace ciff::f3d
         {
         }
 
+        Convert(ciff::Read& data, const ciff::process::GeometryBuildPipeline::Options& options)
+            : ciff::Convert(data), geometryPipelineOptions(options)
+        {
+        }
+
         ~Convert() override
         {
+            StopGeometryPipeline();
             const auto closeSilently = [](WriteBuffer& stream) noexcept
             {
                 try
@@ -366,7 +373,14 @@ namespace ciff::f3d
             {
                 std::cerr << "Unknown error occurred." << std::endl;
             }
+            StopGeometryPipeline();
             return false;
+        }
+
+        void StopGeometryPipeline() noexcept
+        {
+            if (geometryPipeline)
+                geometryPipeline->StopAndJoin();
         }
 
         bool SetFile() override
@@ -430,11 +444,14 @@ namespace ciff::f3d
         }
         void WriteFooter() override
         {
+            StopGeometryPipeline();
             Footer::Write(*this);
         }
 
         std::optional<conversion::Workspace> workspace;
         Catalog catalog;
+        ciff::process::GeometryBuildPipeline::Options geometryPipelineOptions;
+        std::unique_ptr<ciff::process::GeometryBuildPipeline> geometryPipeline;
     };
 
     inline void ValidateNodeHierarchy(const ciff::Read& data)
@@ -498,6 +515,12 @@ namespace ciff::f3d
         }
         catalog.formIndexByHash.reserve(data.geometries.size());
         catalog.nodeInstanceCounts.reserve(data.nodes.size());
+        if (ciff::cmd::async)
+        {
+            geometryPipeline = std::make_unique<ciff::process::GeometryBuildPipeline>(data, geometryPipelineOptions);
+            if (!geometryPipeline->enabled())
+                geometryPipeline.reset();
+        }
     }
 
     inline void AddHashBytes(
@@ -768,6 +791,29 @@ namespace ciff::f3d
                 "CIFF node refers to a missing geometry record");
 
         const auto& geometry = convert.data.geometries[geometryIndex];
+        if (convert.geometryPipeline)
+        {
+            auto prepared = convert.geometryPipeline->Claim(geometryIndex);
+            if (prepared.sourceEmpty || prepared.form.hash == 0U)
+                return;
+            const auto materialIndex =
+                geometry.color < convert.data.colors.size()
+                    ? static_cast<std::uint32_t>(geometry.color)
+                    : (convert.data.colors.empty() ? InvalidCacheIndex : 0U);
+            auto formIndex = InvalidCacheIndex;
+            if (const auto found = convert.catalog.formIndexByHash.find(prepared.form.hash);
+                found != convert.catalog.formIndexByHash.end())
+                formIndex = found->second;
+            else
+            {
+                if (prepared.mesh.empty())
+                    return;
+                formIndex = FormGeometry::AddOrFind(convert, prepared.form.hash, prepared.mesh);
+            }
+            convert.catalog.primitiveStats.Record(geometry, prepared.form.hash);
+            Instance::Emit(convert, formIndex, materialIndex, Matrix3x4(prepared.form.transform));
+            return;
+        }
         auto form = ciff::primitive_instance::Make(convert.data, geometry);
         const auto materialIndex =
             geometry.color < convert.data.colors.size()

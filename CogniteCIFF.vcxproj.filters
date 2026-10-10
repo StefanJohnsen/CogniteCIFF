@@ -88,6 +88,9 @@
     <ClInclude Include="PrimitiveInstanceCIFF.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="GeometryPipelineCIFF.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
     <ClInclude Include="PrimitiveStatsCIFF.h">
       <Filter>Source Files</Filter>
     </ClInclude>

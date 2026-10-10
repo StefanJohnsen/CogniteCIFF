@@ -1,0 +1,22 @@
+CIFF SHIP RETEST - ASYNC THEN SYNC
+RUNS: 3
+
+ENGINES
+Name | Executable
+-----|-----------
+CIFF | C:/FalconCoding/CogniteCIFF/x64/Release/CogniteCIFF.exe
+
+FILES
+Index | File
+------|-----
+0 | C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sources/Ship.ciff
+
+PROCESSES - ASYNC
+Index | Engine | Command Arguments
+------|--------|------------------
+0 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/async-recheck/{file.name}.3d -async
+
+PROCESSES - SYNC
+Index | Engine | Command Arguments
+------|--------|------------------
+0 | CIFF | {file.dir}{file.name}{file.ext} C:/FalconCoding/CogniteCIFF/build/ciff-async-3d-20261010/performance/sync-recheck/{file.name}.3d
