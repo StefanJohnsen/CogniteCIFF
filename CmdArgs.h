@@ -105,7 +105,7 @@ namespace ciff::cmd
         s += "\nUsage: <source_file_or_directory> [target_file] [options]\n\n";
         s += "Options:\n\n";
         s += "  -async        Run the process asynchronously using multithreading for parallel execution\n";
-        s += "                Supported only for ciff, obj and 3d target formats\n";
+        s += "                Supported only for ciff and obj target formats\n";
         s += "  -help         Show this help message\n";
         s += "  -version      Version\n";
         s += "  -bar          Show progress bar\n";

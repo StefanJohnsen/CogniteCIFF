@@ -93,9 +93,9 @@ static bool evaluateArg()
 
 	if (cmd::async)
 	{
-		if (effectiveTargetExtension != ".ciff" && effectiveTargetExtension != ".obj" && effectiveTargetExtension != ".3d")
+		if (effectiveTargetExtension != ".ciff" && effectiveTargetExtension != ".obj")
 		{
-			cmd::err("Async is only supported for ciff, obj and 3d target formats.");
+			cmd::err("Async is only supported for ciff and obj target formats.");
 			return false;
 		}
 	}

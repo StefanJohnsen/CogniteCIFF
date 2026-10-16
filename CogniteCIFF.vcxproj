@@ -173,7 +173,6 @@
     <ClInclude Include="FileType.h" />
     <ClInclude Include="MeshNormals.h" />
     <ClInclude Include="PrimitiveInstanceCIFF.h" />
-    <ClInclude Include="GeometryPipelineCIFF.h" />
     <ClInclude Include="PrimitiveStatsCIFF.h" />
     <ClInclude Include="PrimitivesCIFF.h" />
     <ClInclude Include="PrimitivesRVM.h" />
